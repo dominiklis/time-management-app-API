@@ -1,0 +1,28 @@
+{
+  "name": "time-management-app-api",
+  "version": "1.0.0",
+  "description": "api for time management app",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dominiklis/time-management-app-API.git"
+  },
+  "author": "Dominik Lis",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dominiklis/time-management-app-API/issues"
+  },
+  "homepage": "https://github.com/dominiklis/time-management-app-API#readme",
+  "dependencies": {
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}
