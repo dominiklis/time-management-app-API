@@ -8,6 +8,7 @@ const morgan = require("morgan");
 const { usersRouter } = require("./routes");
 
 const handleErrors = require("./middleware/handleErrors");
+// const auth = require("./middleware/authMidlleware");
 
 // middleware
 app.use(express.json());

@@ -2,6 +2,7 @@ const ApiError = require("../errors/ApiError");
 const db = require("../db");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
+const jwt = require("jsonwebtoken");
 
 const validateUsername = (username) => {
   if (username.length < 3) return false;
@@ -13,6 +14,11 @@ const validateEmail = (email) => validator.isEmail(email);
 
 const validatePassword = (password) =>
   validator.isStrongPassword(password, { minLength: 6 });
+
+const createToken = (id, name, email) =>
+  jwt.sign({ id, name, email }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_LIFETIME,
+  });
 
 const register = async (name, email, password) => {
   if (!name || !email || !password)
@@ -48,7 +54,14 @@ const register = async (name, email, password) => {
 
     if (rows.length === 0) throw new ApiError(500, "something went wrong");
 
-    return rows;
+    return {
+      user: {
+        id: rows[0].user_id,
+        name: rows[0].name,
+        email: rows[0].email,
+      },
+      token: createToken(rows[0].user_id, name, email),
+    };
   } catch (error) {
     if (error.code === "23505") {
       throw new ApiError(
