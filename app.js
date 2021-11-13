@@ -7,6 +7,8 @@ const morgan = require("morgan");
 
 const { usersRouter } = require("./routes");
 
+const handleErrors = require("./middleware/handleErrors");
+
 // middleware
 app.use(express.json());
 app.use(morgan("dev"));
@@ -16,8 +18,7 @@ const apiRoute = process.env.API_ROUTE || "/api";
 
 app.use(`${apiRoute}/users`, usersRouter);
 
-app.get("/", (req, res) => {
-  res.send("hello world");
-});
+// error handling
+app.use(handleErrors);
 
 app.listen(port, () => console.log(`app listening at port ${port}`));
