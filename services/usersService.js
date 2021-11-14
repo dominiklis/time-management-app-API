@@ -5,12 +5,16 @@ const validator = require("validator");
 const jwt = require("jsonwebtoken");
 
 const validateUsername = (username) => {
+  if (!username) return false;
   if (username.length < 3) return false;
 
   return true;
 };
 
-const validateEmail = (email) => validator.isEmail(email);
+const validateEmail = (email) => {
+  if (!email) return false;
+  return validator.isEmail(email);
+};
 
 const validatePassword = (password) =>
   validator.isStrongPassword(password, { minLength: 6 });
@@ -23,8 +27,8 @@ const createToken = (id, name, email) =>
 const register = async (name, email, password) => {
   if (!name || !email || !password)
     throw new ApiError(
-      "name, email and password are required to register new user",
-      400
+      400,
+      "name, email and password are required to register new user"
     );
 
   name = name.trim();
@@ -35,7 +39,6 @@ const register = async (name, email, password) => {
   const isEmailValid = validateEmail(email);
   if (!isEmailValid) throw new ApiError(400, "invalid email");
 
-  password = password.trim();
   const isPasswordValid = validatePassword(password);
   if (!isPasswordValid)
     throw new ApiError(
@@ -73,7 +76,57 @@ const register = async (name, email, password) => {
   }
 };
 
-const login = () => {};
+const login = async (name, email, password) => {
+  if ((!name && !email) || !password)
+    throw new ApiError(
+      400,
+      "password and email or username are required to register new user"
+    );
+
+  const isUsernameValid = validateUsername(name);
+  const isEmailValid = validateEmail(email);
+  if (!isUsernameValid && !isEmailValid)
+    throw new ApiError(400, "invalid username or email");
+
+  const isPasswordValid = validatePassword(password);
+  if (!isPasswordValid)
+    throw new ApiError(
+      400,
+      "invalid password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)"
+    );
+
+  try {
+    let query = "";
+    const params = [];
+    if (isEmailValid) {
+      query = "SELECT * FROM users WHERE email=$1";
+      params.push(email);
+    } else {
+      query = "SELECT * FROM users WHERE name=$1";
+      params.push(name);
+    }
+
+    const { rows } = await db.query(query, params);
+
+    if (rows.length === 0)
+      throw new ApiError(400, "invalid username, email or password");
+
+    const isPasswordValid = await bcrypt.compare(password, rows[0].password);
+    if (!isPasswordValid)
+      throw new ApiError(400, "invalid username, email or password");
+
+    return {
+      user: {
+        id: rows[0].user_id,
+        name: rows[0].name,
+        email: rows[0].email,
+      },
+      token: createToken(rows[0].user_id, name, email),
+    };
+  } catch (error) {
+    throw error;
+  }
+};
 
 const update = () => {};
 
