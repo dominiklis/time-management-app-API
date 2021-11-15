@@ -10,7 +10,7 @@ const {
 
 router.post("/register", register);
 router.post("/login", login);
-router.get("/update", auth, update);
+router.put("/", auth, update);
 router.get("/renew", auth, renew);
 
 module.exports = router;

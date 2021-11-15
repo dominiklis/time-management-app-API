@@ -24,8 +24,17 @@ const login = async (req, res, next) => {
 };
 
 const update = async (req, res, next) => {
+  const { newName, newEmail, newPassword, currentPassword } = req.body;
+
   try {
-    res.status(204).json("UPDATE USER");
+    const result = await userService.update(
+      req.user,
+      newName,
+      newEmail,
+      newPassword,
+      currentPassword
+    );
+    res.status(204).json(result);
   } catch (error) {
     next(error);
   }
