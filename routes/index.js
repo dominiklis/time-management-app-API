@@ -1,5 +1,7 @@
-const users = require("./usersRoutes");
+const usersRouter = require("./usersRoutes");
+const tasksRouter = require("./tasksRouter");
 
 module.exports = {
-  usersRouter: users,
+  usersRouter,
+  tasksRouter,
 };
