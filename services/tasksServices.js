@@ -158,9 +158,33 @@ const edit = async (
   }
 };
 
+const remove = async (user, taskId) => {
+  if (
+    !taskId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      taskId
+    )
+  )
+    throw new ApiError(400, "bad request - invalid id");
+
+  try {
+    const { rows } = await db.query(
+      "DELETE FROM tasks WHERE task_id=$1 AND author_id=$2 RETURNING *;",
+      [taskId, user.id]
+    );
+
+    if (rows.length === 0) throw new ApiError(400, "bad request");
+
+    return mapTaskToSnakeCase(rows[0]);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   get,
   getById,
   create,
   edit,
+  remove,
 };

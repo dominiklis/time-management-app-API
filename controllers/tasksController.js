@@ -61,9 +61,22 @@ const editTask = async (req, res, next) => {
   }
 };
 
+const deleteTask = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const result = await tasksServices.remove(req.user, id);
+
+    res.status(204).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTasks,
   getTaskById,
   createTask,
   editTask,
+  deleteTask,
 };
