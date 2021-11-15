@@ -16,6 +16,19 @@ const mapTaskToSnakeCase = (task) => {
   };
 };
 
+const get = async (user) => {
+  try {
+    const { rows } = await db.query("SELECT * FROM tasks WHERE author_id=$1", [
+      user.id,
+    ]);
+
+    const tasks = rows.map((task) => mapTaskToSnakeCase(task));
+    return tasks;
+  } catch (error) {
+    throw error;
+  }
+};
+
 const getById = async (user, taskId) => {
   if (
     !taskId ||
@@ -102,6 +115,7 @@ const create = async (
 };
 
 module.exports = {
+  get,
   getById,
   create,
 };

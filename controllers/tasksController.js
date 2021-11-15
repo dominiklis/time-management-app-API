@@ -1,6 +1,15 @@
 const db = require("../db");
 const { tasksServices } = require("../services");
 
+const getTasks = async (req, res, next) => {
+  try {
+    const result = await tasksServices.get(req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getTaskById = async (req, res, next) => {
   const { id } = req.params;
   try {
@@ -31,6 +40,7 @@ const createTask = async (req, res, next) => {
 };
 
 module.exports = {
-  createTask,
+  getTasks,
   getTaskById,
+  createTask,
 };
