@@ -213,7 +213,6 @@ const renew = async (user) => {
     const { rows } = await db.query("SELECT * FROM users WHERE user_id=$1", [
       user.id,
     ]);
-    console.log(rows);
 
     if (user.name !== rows[0].name || user.email !== rows[0].email)
       throw new ApiError(400, "bad request");

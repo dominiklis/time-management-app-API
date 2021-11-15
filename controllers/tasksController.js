@@ -12,6 +12,7 @@ const getTasks = async (req, res, next) => {
 
 const getTaskById = async (req, res, next) => {
   const { id } = req.params;
+
   try {
     const result = await tasksServices.getById(req.user, id);
     res.status(200).json(result);
@@ -39,8 +40,30 @@ const createTask = async (req, res, next) => {
   }
 };
 
+const editTask = async (req, res, next) => {
+  const { name, description, dateToComplete, startTime, endTime } = req.body;
+  const { id } = req.params;
+
+  try {
+    const result = await tasksServices.edit(
+      req.user,
+      id,
+      name,
+      description,
+      dateToComplete,
+      startTime,
+      endTime
+    );
+
+    res.status(204).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTasks,
   getTaskById,
   createTask,
+  editTask,
 };

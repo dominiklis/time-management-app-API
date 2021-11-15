@@ -61,6 +61,7 @@ const create = async (
   endTime
 ) => {
   if (!name) throw new ApiError(400, "name for task is required");
+  else name = name.trim();
 
   try {
     const columns = ["author_id", "task_name"];
@@ -97,18 +98,61 @@ const create = async (
 
     const { rows } = await db.query(query, params);
 
-    return {
-      id: rows[0].task_id,
-      authorId: rows[0].author_id,
-      name: rows[0].task_name,
-      description: rows[0].task_description,
-      completed: rows[0].task_completed,
-      createdAt: rows[0].created_at,
-      completedAt: rows[0].completed_at,
-      dateToComplete: rows[0].date_to_complete,
-      startTime: rows[0].start_time,
-      endTime: rows[0].end_time,
-    };
+    return mapTaskToSnakeCase(rows[0]);
+  } catch (error) {
+    throw error;
+  }
+};
+
+const edit = async (
+  user,
+  taskId,
+  name,
+  description,
+  dateToComplete,
+  startTime,
+  endTime
+) => {
+  if (name) name = name.trim();
+
+  if (!name && !description && !dateToComplete && !startTime && !endTime)
+    return;
+
+  try {
+    const taskToEdit = await getById(user, taskId);
+
+    if (name) taskToEdit.name = name;
+
+    if (description) taskToEdit.description = description;
+
+    if (dateToComplete) taskToEdit.dateToComplete = dateToComplete;
+
+    if (startTime) taskToEdit.startTime = startTime;
+
+    if (endTime) taskToEdit.endTime = endTime;
+
+    const { rows } = await db.query(
+      `UPDATE tasks SET 
+        task_name=$3,  
+        task_description=$4,
+        date_to_complete=$5,
+        start_time=$6,
+        end_time=$7 
+          WHERE task_id=$2 AND author_id=$1 RETURNING *;`,
+      [
+        user.id,
+        taskId,
+        taskToEdit.name,
+        taskToEdit.description,
+        taskToEdit.dateToComplete,
+        taskToEdit.startTime,
+        taskToEdit.endTime,
+      ]
+    );
+
+    if (rows.length === 0) throw new ApiError(500, "something went wrong");
+
+    return mapTaskToSnakeCase(rows[0]);
   } catch (error) {
     throw error;
   }
@@ -118,4 +162,5 @@ module.exports = {
   get,
   getById,
   create,
+  edit,
 };
