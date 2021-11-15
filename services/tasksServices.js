@@ -1,6 +1,44 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
 
+const mapTaskToSnakeCase = (task) => {
+  return {
+    id: task.task_id,
+    authorId: task.author_id,
+    name: task.task_name,
+    description: task.task_description,
+    completed: task.task_completed,
+    createdAt: task.created_at,
+    completedAt: task.completed_at,
+    dateToComplete: task.date_to_complete,
+    startTime: task.start_time,
+    endTime: task.end_time,
+  };
+};
+
+const getById = async (user, taskId) => {
+  if (
+    !taskId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      taskId
+    )
+  )
+    throw new ApiError(400, "bad request - invalid id");
+
+  try {
+    const { rows } = await db.query(
+      "SELECT * FROM tasks WHERE task_id=$1 AND author_id=$2",
+      [taskId, user.id]
+    );
+
+    if (rows.length === 0) throw new ApiError(400, "bad request");
+
+    return mapTaskToSnakeCase(rows[0]);
+  } catch (error) {
+    throw error;
+  }
+};
+
 const create = async (
   user,
   name,
@@ -64,5 +102,6 @@ const create = async (
 };
 
 module.exports = {
+  getById,
   create,
 };

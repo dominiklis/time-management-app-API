@@ -1,6 +1,16 @@
 const db = require("../db");
 const { tasksServices } = require("../services");
 
+const getTaskById = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const result = await tasksServices.getById(req.user, id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const createTask = async (req, res, next) => {
   const { name, description, dateToComplete, startTime, endTime } = req.body;
 
@@ -22,4 +32,5 @@ const createTask = async (req, res, next) => {
 
 module.exports = {
   createTask,
+  getTaskById,
 };
