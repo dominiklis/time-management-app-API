@@ -166,9 +166,8 @@ const update = async (
       !isPasswordValid ||
       loggedUser.name !== rows[0].name ||
       loggedUser.email !== rows[0].email
-    ) {
+    )
       throw new ApiError(400, "bad request");
-    }
 
     let query = "name=$2, email=$3, password=$4";
     let params = [loggedUser.id];
@@ -209,7 +208,28 @@ const update = async (
   }
 };
 
-const renew = () => {};
+const renew = async (user) => {
+  try {
+    const { rows } = await db.query("SELECT * FROM users WHERE user_id=$1", [
+      user.id,
+    ]);
+    console.log(rows);
+
+    if (user.name !== rows[0].name || user.email !== rows[0].email)
+      throw new ApiError(400, "bad request");
+
+    return {
+      user: {
+        id: rows[0].user_id,
+        name: rows[0].name,
+        email: rows[0].email,
+      },
+      token: createToken(rows[0].user_id, rows[0].name, rows[0].email),
+    };
+  } catch (error) {
+    throw error;
+  }
+};
 
 module.exports = {
   register,

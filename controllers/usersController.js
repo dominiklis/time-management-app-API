@@ -42,7 +42,8 @@ const update = async (req, res, next) => {
 
 const renew = async (req, res, next) => {
   try {
-    res.status(200).json("RENEW USER");
+    const result = await userService.renew(req.user);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
