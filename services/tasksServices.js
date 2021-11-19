@@ -1,5 +1,7 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
+const { taskAccessLevels } = require("../constants");
+const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
 
 const mapTaskToSnakeCase = (task) => {
   return {
@@ -13,14 +15,19 @@ const mapTaskToSnakeCase = (task) => {
     dateToComplete: task.date_to_complete,
     startTime: task.start_time,
     endTime: task.end_time,
+    accessedAt: task.accessed_at,
+    accessLevel: task.access_level,
   };
 };
 
 const get = async (user) => {
   try {
-    const { rows } = await db.query("SELECT * FROM tasks WHERE author_id=$1", [
-      user.id,
-    ]);
+    const { rows } = await db.query(
+      `SELECT ts.*, ut.accessed_at, ut.access_level FROM 
+        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
+          WHERE ut.user_id=$1;`,
+      [user.id]
+    );
 
     const tasks = rows.map((task) => mapTaskToSnakeCase(task));
     return tasks;
@@ -30,17 +37,14 @@ const get = async (user) => {
 };
 
 const getById = async (user, taskId) => {
-  if (
-    !taskId ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      taskId
-    )
-  )
+  if (!taskId || !checkIfIdIsValid(taskId))
     throw new ApiError(400, "bad request - invalid id");
 
   try {
     const { rows } = await db.query(
-      "SELECT * FROM tasks WHERE task_id=$1 AND author_id=$2",
+      `SELECT ts.*, ut.accessed_at, ut.access_level FROM 
+        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
+          WHERE ts.task_id=$1 AND ut.user_id=$2`,
       [taskId, user.id]
     );
 
@@ -69,6 +73,7 @@ const create = async (
     const params = [user.id, name];
 
     if (description) {
+      description = description.trim();
       columns.push("task_description");
       values.push(`$${values.length + 1}`);
       params.push(description);
@@ -98,7 +103,23 @@ const create = async (
 
     const { rows } = await db.query(query, params);
 
-    return mapTaskToSnakeCase(rows[0]);
+    if (rows[0].length === 0) throw new ApiError(500, "something went wrong");
+
+    const { rows: usersTasksRows } = await db.query(
+      "INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *;",
+      [user.id, rows[0].task_id, taskAccessLevels.delete]
+    );
+
+    if (usersTasksRows.length === 0) {
+      await db.query("DELETE FROM tasks WHERE task_id=$1", [rows[0].task_id]);
+      throw new ApiError(500, "something went wrong");
+    }
+
+    return mapTaskToSnakeCase({
+      ...rows[0],
+      accessed_at: usersTasksRows[0].accessed_at,
+      access_level: usersTasksRows[0].access_level,
+    });
   } catch (error) {
     throw error;
   }
@@ -132,15 +153,21 @@ const edit = async (
     if (endTime) taskToEdit.endTime = endTime;
 
     const { rows } = await db.query(
-      `UPDATE tasks SET 
-        task_name=$3,  
-        task_description=$4,
-        date_to_complete=$5,
-        start_time=$6,
-        end_time=$7 
-          WHERE task_id=$2 AND author_id=$1 RETURNING *;`,
+      `UPDATE tasks AS ts SET 
+        task_name=$5,  
+        task_description=$6,
+        date_to_complete=$7,
+        start_time=$8,
+        end_time=$9
+          FROM users_tasks AS ut 
+            WHERE ts.task_id = ut.task_id 
+              AND ut.user_id=$1
+              AND (ut.access_level=$2 OR ut.access_level=$3) 
+              AND ts.task_id=$4 RETURNING *`,
       [
         user.id,
+        taskAccessLevels.edit,
+        taskAccessLevels.delete,
         taskId,
         taskToEdit.name,
         taskToEdit.description,
@@ -150,7 +177,7 @@ const edit = async (
       ]
     );
 
-    if (rows.length === 0) throw new ApiError(500, "something went wrong");
+    if (rows.length === 0) throw new ApiError(400, "bad request");
 
     return mapTaskToSnakeCase(rows[0]);
   } catch (error) {
@@ -159,18 +186,24 @@ const edit = async (
 };
 
 const remove = async (user, taskId) => {
-  if (
-    !taskId ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      taskId
-    )
-  )
+  if (!taskId || !checkIfIdIsValid(taskId))
     throw new ApiError(400, "bad request - invalid id");
 
   try {
+    const { rows: usersTasksRows } = await db.query(
+      `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
+      [user.id, taskId]
+    );
+
+    if (
+      usersTasksRows.length === 0 ||
+      usersTasksRows[0].access_level !== taskAccessLevels.delete
+    )
+      throw new ApiError(400, "bad request");
+
     const { rows } = await db.query(
-      "DELETE FROM tasks WHERE task_id=$1 AND author_id=$2 RETURNING *;",
-      [taskId, user.id]
+      "DELETE FROM tasks WHERE task_id=$1 RETURNING *;",
+      [taskId]
     );
 
     if (rows.length === 0) throw new ApiError(400, "bad request");
