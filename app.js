@@ -7,12 +7,16 @@ const morgan = require("morgan");
 
 const { usersRouter, tasksRouter } = require("./routes");
 
+const helmet = require("helmet");
+const cors = require("cors");
 const handleErrors = require("./middleware/handleErrors");
 const auth = require("./middleware/authMidlleware");
 
 // middleware
 app.use(express.json());
 app.use(morgan("dev"));
+app.use(cors());
+app.use(helmet());
 
 // routes
 const apiRoute = process.env.API_ROUTE || "/api";
