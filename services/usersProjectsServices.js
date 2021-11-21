@@ -4,36 +4,34 @@ const { accessLevels } = require("../constants");
 const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
 const validator = require("validator");
 
-const mapUsersTasksToSnakeCase = (usersTask) => {
+const mapUsersToSnakeCase = (user) => {
   return {
-    taskId: usersTask?.task_id,
-    name: usersTask?.name,
-    email: usersTask?.email,
-    userId: usersTask?.user_id,
-    accessedAt: usersTask?.accessed_at,
-    accessLevel: usersTask?.access_level,
+    projectId: user?.project_id,
+    name: user?.name,
+    email: user?.email,
+    userId: user?.user_id,
+    accessedAt: user?.accessed_at,
+    accessLevel: user?.access_level,
   };
 };
 
-const getUsers = async (user, taskId) => {
-  if (!taskId || !checkIfIdIsValid(taskId))
+const getUsers = async (user, projectId) => {
+  if (!projectId || !checkIfIdIsValid(projectId))
     throw new ApiError(400, "bad request - invalid id");
 
   try {
     const { rows } = await db.query(
-      `SELECT ut.task_id, us.name, us.email, us.user_id, ut.accessed_at, ut.access_level FROM users_tasks AS ut 
-        LEFT JOIN users AS us ON ut.user_id = us.user_id
-          WHERE task_id=$1`,
-      [taskId]
+      `SELECT up.project_id, us.name, us.email, us.user_id, up.accessed_at, up.access_level FROM users_projects AS up 
+        LEFT JOIN users AS us ON up.user_id = us.user_id
+          WHERE project_id=$1`,
+      [projectId]
     );
 
-    if (!rows.some((ut) => ut.user_id === user.id))
+    if (!rows.some((up) => up.user_id === user.id))
       throw new ApiError(400, "bad request");
 
-    const usersTasks = rows.map((userTask) =>
-      mapUsersTasksToSnakeCase(userTask)
-    );
-    return usersTasks;
+    const usersProjects = rows.map((u) => mapUsersToSnakeCase(u));
+    return usersProjects;
   } catch (error) {
     throw error;
   }
@@ -41,7 +39,7 @@ const getUsers = async (user, taskId) => {
 
 const create = async (
   user,
-  taskId,
+  projectId,
   userId,
   userName,
   userEmail,
@@ -50,8 +48,8 @@ const create = async (
   if (!userId && !userEmail && !userName)
     throw new ApiError(400, "bad request");
 
-  if (!taskId || !checkIfIdIsValid(taskId))
-    throw new ApiError(400, "bad request - invalid task id");
+  if (!projectId || !checkIfIdIsValid(projectId))
+    throw new ApiError(400, "bad request - invalid project id");
 
   if (userId && !checkIfIdIsValid(userId))
     throw new ApiError(400, "bad request - invalid user id");
@@ -61,8 +59,8 @@ const create = async (
 
   try {
     const { rows } = await db.query(
-      `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2;`,
-      [user.id, taskId]
+      `SELECT * FROM users_projects WHERE user_id=$1 AND project_id=$2;`,
+      [user.id, projectId]
     );
 
     if (rows.length === 0 || rows[0].access_level === accessLevels.view)
@@ -96,20 +94,20 @@ const create = async (
       if (!userIdFound) throw new ApiError(400, "bad request");
     }
 
-    const { rows: createdUTRows } = await db.query(
-      `INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *`,
-      [userId, taskId, accessLevel]
+    const { rows: createdUPRows } = await db.query(
+      `INSERT INTO users_projects (user_id, project_id, access_level) VALUES ($1, $2, $3) RETURNING *`,
+      [userId, projectId, accessLevel]
     );
 
-    if (createdUTRows.length === 0)
+    if (createdUPRows.length === 0)
       throw new ApiError(500, "something went wrong");
 
-    return mapUsersTasksToSnakeCase(createdUTRows[0]);
+    return mapUsersToSnakeCase(createdUPRows[0]);
   } catch (error) {
     if (error?.code === "23505") {
       throw new ApiError(
         400,
-        "bad request - user arleady has access to this task"
+        "bad request - user arleady has access to this project"
       );
     }
 
@@ -123,27 +121,21 @@ const create = async (
   }
 };
 
-const edit = async (user, taskId, userId, userName, userEmail, accessLevel) => {
+const edit = async (user, projectId, userId, accessLevel) => {
   if (!accessLevel) throw new ApiError(400, "bad request");
 
-  if (!userId && !userEmail && !userName)
-    throw new ApiError(400, "bad request");
-
-  if (!taskId || !checkIfIdIsValid(taskId))
+  if (!projectId || !checkIfIdIsValid(projectId))
     throw new ApiError(400, "bad request - invalid task id");
 
   if (!userId || !checkIfIdIsValid(userId))
     throw new ApiError(400, "bad request - invalid user id");
 
-  if (userEmail && !validator.isEmail(userEmail))
-    throw new ApiError(400, "bad request");
-
   try {
     const { rows } = await db.query(
-      `SELECT ut.*, ts.author_id FROM users_tasks AS ut
-        LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
-          WHERE ut.user_id=$1 AND ut.task_id=$2;`,
-      [user.id, taskId]
+      `SELECT up.*, ps.author_id FROM users_projects AS up
+        LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
+          WHERE up.user_id=$1 AND up.project_id=$2;`,
+      [user.id, projectId]
     );
 
     if (rows.length === 0 || rows[0].access_level === accessLevels.view)
@@ -186,14 +178,14 @@ const edit = async (user, taskId, userId, userName, userEmail, accessLevel) => {
     if (userId === rows[0].author_id) throw new ApiError(400, "bad request");
 
     const { rows: editedUTRows } = await db.query(
-      `UPDATE users_tasks SET access_level=$1 WHERE task_id=$2 AND user_id=$3 RETURNING *;`,
-      [accessLevel, taskId, userId]
+      `UPDATE users_projects SET access_level=$1 WHERE project_id=$2 AND user_id=$3 RETURNING *;`,
+      [accessLevel, projectId, userId]
     );
 
     if (editedUTRows.length === 0)
       throw new ApiError(500, "something went wrong");
 
-    return mapUsersTasksToSnakeCase(editedUTRows[0]);
+    return mapUsersToSnakeCase(editedUTRows[0]);
   } catch (error) {
     if (error?.code === "23514") {
       throw new ApiError(
@@ -205,8 +197,8 @@ const edit = async (user, taskId, userId, userName, userEmail, accessLevel) => {
   }
 };
 
-const remove = async (user, taskId, userId) => {
-  if (!taskId || !checkIfIdIsValid(taskId))
+const remove = async (user, projectId, userId) => {
+  if (!projectId || !checkIfIdIsValid(projectId))
     throw new ApiError(400, "bad request - invalid task id");
 
   if (!userId || !checkIfIdIsValid(userId))
@@ -214,10 +206,10 @@ const remove = async (user, taskId, userId) => {
 
   try {
     const { rows } = await db.query(
-      `SELECT ut.*, ts.author_id FROM users_tasks AS ut
-        LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
-          WHERE ut.user_id=$1 AND ut.task_id=$2;`,
-      [user.id, taskId]
+      `SELECT up.*, ps.author_id FROM users_projects AS up
+        LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
+          WHERE up.user_id=$1 AND up.project_id=$2;`,
+      [user.id, projectId]
     );
 
     if (userId === rows[0].author_id) throw new ApiError(400, "bad request");
@@ -226,11 +218,11 @@ const remove = async (user, taskId, userId) => {
       throw new ApiError(400, "bad request");
 
     const { rows: removedUTRows } = await db.query(
-      `DELETE FROM users_tasks WHERE task_id=$1 AND user_id=$2 RETURNING *;`,
-      [taskId, userId]
+      `DELETE FROM users_projects WHERE project_id=$1 AND user_id=$2 RETURNING *;`,
+      [projectId, userId]
     );
 
-    return mapUsersTasksToSnakeCase(removedUTRows[0]);
+    return mapUsersToSnakeCase(removedUTRows[0]);
   } catch (error) {
     throw error;
   }

@@ -1,4 +1,3 @@
-const db = require("../db");
 const { tasksServices, usersTasksServices } = require("../services");
 
 const getTasks = async (req, res, next) => {

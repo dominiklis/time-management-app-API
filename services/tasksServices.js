@@ -1,6 +1,6 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { taskAccessLevels } = require("../constants");
+const { accessLevels } = require("../constants");
 const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
 
 const mapTaskToSnakeCase = (task) => {
@@ -67,11 +67,11 @@ const create = async (
   if (!name) throw new ApiError(400, "name for task is required");
   else name = name.trim();
 
-  try {
-    const columns = ["author_id", "task_name"];
-    const values = ["$1", "$2"];
-    const params = [user.id, name];
+  const columns = ["author_id", "task_name"];
+  const values = ["$1", "$2"];
+  const params = [user.id, name];
 
+  try {
     if (description) {
       description = description.trim();
       columns.push("task_description");
@@ -107,7 +107,7 @@ const create = async (
 
     const { rows: usersTasksRows } = await db.query(
       "INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *;",
-      [user.id, rows[0].task_id, taskAccessLevels.delete]
+      [user.id, rows[0].task_id, accessLevels.delete]
     );
 
     if (usersTasksRows.length === 0) {
@@ -135,6 +135,10 @@ const edit = async (
   endTime
 ) => {
   if (name) name = name.trim();
+  if (description) description = description.trim();
+
+  if (!taskId || checkIfIdIsValid(taskId))
+    throw new ApiError(400, "bad request");
 
   if (!name && !description && !dateToComplete && !startTime && !endTime)
     return;
@@ -166,8 +170,8 @@ const edit = async (
               AND ts.task_id=$4 RETURNING *`,
       [
         user.id,
-        taskAccessLevels.edit,
-        taskAccessLevels.delete,
+        accessLevels.edit,
+        accessLevels.delete,
         taskId,
         taskToEdit.name,
         taskToEdit.description,
@@ -197,7 +201,7 @@ const remove = async (user, taskId) => {
 
     if (
       usersTasksRows.length === 0 ||
-      usersTasksRows[0].access_level !== taskAccessLevels.delete
+      usersTasksRows[0].access_level !== accessLevels.delete
     )
       throw new ApiError(400, "bad request");
 

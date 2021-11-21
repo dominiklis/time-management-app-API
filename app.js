@@ -5,7 +5,7 @@ const port = process.env.PORT || 5000;
 
 const morgan = require("morgan");
 
-const { usersRouter, tasksRouter } = require("./routes");
+const { usersRouter, tasksRouter, projectsRouter } = require("./routes");
 
 const helmet = require("helmet");
 const cors = require("cors");
@@ -23,6 +23,7 @@ const apiRoute = process.env.API_ROUTE || "/api";
 
 app.use(`${apiRoute}/users`, usersRouter);
 app.use(`${apiRoute}/tasks`, auth, tasksRouter);
+app.use(`${apiRoute}/projects`, auth, projectsRouter);
 
 // error handling
 app.use(handleErrors);
