@@ -7,12 +7,14 @@ const mapTaskToSnakeCase = (task) => {
   return {
     id: task.task_id,
     authorId: task.author_id,
+    authorName: task.name,
+    authorEmail: task.email,
     name: task.task_name,
     description: task.task_description,
     completed: task.task_completed,
     createdAt: task.created_at,
     completedAt: task.completed_at,
-    dateToComplete: task.date_to_complete,
+    dateToComplete: task?.date_to_complete,
     startTime: task.start_time,
     endTime: task.end_time,
     accessedAt: task.accessed_at,
@@ -23,9 +25,10 @@ const mapTaskToSnakeCase = (task) => {
 const get = async (user) => {
   try {
     const { rows } = await db.query(
-      `SELECT ts.*, ut.accessed_at, ut.access_level FROM 
+      `SELECT us.name, us.email, ts.*, ut.accessed_at, ut.access_level FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
-          WHERE ut.user_id=$1;`,
+          LEFT JOIN users AS us ON ts.author_id=us.user_id
+            WHERE ut.user_id=$1;`,
       [user.id]
     );
 
@@ -42,9 +45,10 @@ const getById = async (user, taskId) => {
 
   try {
     const { rows } = await db.query(
-      `SELECT ts.*, ut.accessed_at, ut.access_level FROM 
-        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
-          WHERE ts.task_id=$1 AND ut.user_id=$2`,
+      `SELECT us.name, us.email, ts.*, ut.accessed_at, ut.access_level FROM 
+        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
+          LEFT JOIN users AS us ON ts.author_id=us.user_id
+            WHERE ts.task_id=$1 AND ut.user_id=$2`,
       [taskId, user.id]
     );
 

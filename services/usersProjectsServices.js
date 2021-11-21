@@ -2,18 +2,8 @@ const db = require("../db");
 const ApiError = require("../errors/ApiError");
 const { accessLevels } = require("../constants");
 const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
+const mapUsersAccessToCamelCase = require("../utils/mapUsersAccessToCamelCase");
 const validator = require("validator");
-
-const mapUsersToSnakeCase = (user) => {
-  return {
-    projectId: user?.project_id,
-    name: user?.name,
-    email: user?.email,
-    userId: user?.user_id,
-    accessedAt: user?.accessed_at,
-    accessLevel: user?.access_level,
-  };
-};
 
 const getUsers = async (user, projectId) => {
   if (!projectId || !checkIfIdIsValid(projectId))
@@ -30,7 +20,7 @@ const getUsers = async (user, projectId) => {
     if (!rows.some((up) => up.user_id === user.id))
       throw new ApiError(400, "bad request");
 
-    const usersProjects = rows.map((u) => mapUsersToSnakeCase(u));
+    const usersProjects = rows.map((u) => mapUsersAccessToCamelCase(u));
     return usersProjects;
   } catch (error) {
     throw error;
@@ -102,7 +92,7 @@ const create = async (
     if (createdUPRows.length === 0)
       throw new ApiError(500, "something went wrong");
 
-    return mapUsersToSnakeCase(createdUPRows[0]);
+    return mapUsersAccessToCamelCase(createdUPRows[0]);
   } catch (error) {
     if (error?.code === "23505") {
       throw new ApiError(
@@ -185,7 +175,7 @@ const edit = async (user, projectId, userId, accessLevel) => {
     if (editedUTRows.length === 0)
       throw new ApiError(500, "something went wrong");
 
-    return mapUsersToSnakeCase(editedUTRows[0]);
+    return mapUsersAccessToCamelCase(editedUTRows[0]);
   } catch (error) {
     if (error?.code === "23514") {
       throw new ApiError(
@@ -222,7 +212,7 @@ const remove = async (user, projectId, userId) => {
       [projectId, userId]
     );
 
-    return mapUsersToSnakeCase(removedUTRows[0]);
+    return mapUsersAccessToCamelCase(removedUTRows[0]);
   } catch (error) {
     throw error;
   }

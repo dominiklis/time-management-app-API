@@ -7,6 +7,8 @@ const mapProjectToSnakeCase = (project) => {
   return {
     id: project.project_id,
     authorId: project.author_id,
+    authorName: project.name,
+    authorEmail: project.email,
     name: project.project_name,
     description: project.project_description,
     createdAt: project.created_at,
@@ -18,9 +20,10 @@ const mapProjectToSnakeCase = (project) => {
 const get = async (user) => {
   try {
     const { rows } = await db.query(
-      `SELECT ps.*, up.accessed_at, up.access_level FROM 
-        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id 
-          WHERE up.user_id=$1;`,
+      `SELECT us.name, us.email, ps.*, up.accessed_at, up.access_level FROM 
+        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
+          LEFT JOIN users AS us ON ps.author_id=us.user_id
+            WHERE up.user_id=$1;`,
       [user.id]
     );
 
@@ -37,9 +40,10 @@ const getById = async (user, projectId) => {
 
   try {
     const { rows } = await db.query(
-      `SELECT ps.*, up.accessed_at, up.access_level FROM 
-        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id 
-          WHERE up.user_id=$1 AND ps.project_id=$2;`,
+      `SELECT us.name, us.email, ps.*, up.accessed_at, up.access_level FROM 
+        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
+          LEFT JOIN users AS us ON ps.author_id=us.user_id
+            WHERE up.user_id=$1 AND ps.project_id=$2;`,
       [user.id, projectId]
     );
 
