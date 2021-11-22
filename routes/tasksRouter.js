@@ -1,16 +1,20 @@
 const express = require("express");
 const router = express.Router();
+
 const {
   getTasks,
   getTaskById,
   createTask,
   editTask,
   deleteTask,
+} = require("../controllers/tasksController");
+
+const {
   getUsersWithAccess,
   giveUserAccess,
   editUserAccess,
   deleteUserAccess,
-} = require("../controllers/tasksController");
+} = require("../controllers/usersTasksController");
 
 router.get("/", getTasks);
 router.get("/:id", getTaskById);
