@@ -72,8 +72,6 @@ const deleteTask = async (req, res, next) => {
   }
 };
 
-// users_tasks realtionship
-
 module.exports = {
   getTasks,
   getTaskById,

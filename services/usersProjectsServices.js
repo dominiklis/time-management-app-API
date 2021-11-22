@@ -1,9 +1,12 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
 const { accessLevels } = require("../constants");
-const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
-const mapUsersAccessToCamelCase = require("../utils/mapUsersAccessToCamelCase");
 const validator = require("validator");
+const {
+  checkIfIdIsValid,
+  mapUsersAccessToCamelCase,
+  getUserId,
+} = require("../utils");
 
 const getUsers = async (user, projectId) => {
   if (!projectId || !checkIfIdIsValid(projectId))
@@ -57,31 +60,8 @@ const create = async (
       throw new ApiError(400, "bad request");
 
     if (!userId) {
-      let userIdFound = false;
-
-      if (userEmail) {
-        const { rows: emailRows } = await db.query(
-          "SELECT user_id FROM users WHERE email=$1",
-          [userEmail]
-        );
-
-        if (emailRows.length !== 0) {
-          userId = emailRows[0].user_id;
-          userIdFound = true;
-        }
-      } else {
-        const { rows: nameRows } = await db.query(
-          "SELECT user_id FROM users WHERE name=$1",
-          [userName]
-        );
-
-        if (nameRows.length !== 0) {
-          userId = nameRows[0].user_id;
-          userIdFound = true;
-        }
-      }
-
-      if (!userIdFound) throw new ApiError(400, "bad request");
+      userId = await getUserId(userEmail, userName);
+      if (!userId) throw new ApiError(400, "bad request");
     }
 
     const { rows: createdUPRows } = await db.query(

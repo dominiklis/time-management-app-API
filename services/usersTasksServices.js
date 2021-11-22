@@ -1,9 +1,12 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
 const { accessLevels } = require("../constants");
-const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
 const validator = require("validator");
-const mapUsersAccessToCamelCase = require("../utils/mapUsersAccessToCamelCase");
+const {
+  getUserId,
+  mapUsersAccessToCamelCase,
+  checkIfIdIsValid,
+} = require("../utils");
 
 const getUsers = async (user, taskId) => {
   if (!taskId || !checkIfIdIsValid(taskId))
@@ -59,31 +62,8 @@ const create = async (
       throw new ApiError(400, "bad request");
 
     if (!userId) {
-      let userIdFound = false;
-
-      if (userEmail) {
-        const { rows: emailRows } = await db.query(
-          "SELECT user_id FROM users WHERE email=$1",
-          [userEmail]
-        );
-
-        if (emailRows.length !== 0) {
-          userId = emailRows[0].user_id;
-          userIdFound = true;
-        }
-      } else {
-        const { rows: nameRows } = await db.query(
-          "SELECT user_id FROM users WHERE name=$1",
-          [userName]
-        );
-
-        if (nameRows.length !== 0) {
-          userId = nameRows[0].user_id;
-          userIdFound = true;
-        }
-      }
-
-      if (!userIdFound) throw new ApiError(400, "bad request");
+      userId = await getUserId(userEmail, userName);
+      if (!userId) throw new ApiError(400, "bad request");
     }
 
     const { rows: createdUTRows } = await db.query(
@@ -113,20 +93,14 @@ const create = async (
   }
 };
 
-const edit = async (user, taskId, userId, userName, userEmail, accessLevel) => {
+const edit = async (user, taskId, userId, accessLevel) => {
   if (!accessLevel) throw new ApiError(400, "bad request");
-
-  if (!userId && !userEmail && !userName)
-    throw new ApiError(400, "bad request");
 
   if (!taskId || !checkIfIdIsValid(taskId))
     throw new ApiError(400, "bad request - invalid task id");
 
   if (!userId || !checkIfIdIsValid(userId))
     throw new ApiError(400, "bad request - invalid user id");
-
-  if (userEmail && !validator.isEmail(userEmail))
-    throw new ApiError(400, "bad request");
 
   try {
     const { rows } = await db.query(
@@ -144,34 +118,6 @@ const edit = async (user, taskId, userId, userName, userEmail, accessLevel) => {
       accessLevel === accessLevels.delete
     )
       throw new ApiError(400, "bad request");
-
-    if (!userId) {
-      let userIdFound = false;
-
-      if (userEmail) {
-        const { rows: emailRows } = await db.query(
-          "SELECT user_id FROM users WHERE email=$1",
-          [userEmail]
-        );
-
-        if (emailRows.length !== 0) {
-          userId = emailRows[0].user_id;
-          userIdFound = true;
-        }
-      } else {
-        const { rows: nameRows } = await db.query(
-          "SELECT user_id FROM users WHERE name=$1",
-          [userName]
-        );
-
-        if (nameRows.length !== 0) {
-          userId = nameRows[0].user_id;
-          userIdFound = true;
-        }
-      }
-
-      if (!userIdFound) throw new ApiError(400, "bad request");
-    }
 
     if (userId === rows[0].author_id) throw new ApiError(400, "bad request");
 

@@ -32,15 +32,13 @@ const giveUserAccess = async (req, res, next) => {
 
 const editUserAccess = async (req, res, next) => {
   const { taskId, userId } = req.params;
-  const { userName, userEmail, accessLevel } = req.body;
+  const { accessLevel } = req.body;
 
   try {
     const result = await usersTasksServices.edit(
       req.user,
       taskId,
       userId,
-      userName,
-      userEmail,
       accessLevel
     );
     res.status(204).json(result);
