@@ -1,8 +1,7 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { accessLevels } = require("../utils/constants");
-const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
-const { mapToCamelCase } = require("../utils");
+const { accessLevels, errorTexts } = require("../utils/constants");
+const { mapToCamelCase, validateId } = require("../utils");
 
 const get = async (user) => {
   try {
@@ -10,7 +9,7 @@ const get = async (user) => {
       `SELECT us.name, us.email, ts.*, ut.accessed_at, ut.access_level FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
           LEFT JOIN users AS us ON ts.author_id=us.user_id
-            WHERE ut.user_id=$1;`,
+            WHERE ut.user_id=$1`,
       [user.id]
     );
 
@@ -22,8 +21,8 @@ const get = async (user) => {
 };
 
 const getById = async (user, taskId) => {
-  if (!taskId || !checkIfIdIsValid(taskId))
-    throw new ApiError(400, "bad request - invalid id");
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const task = await db.oneOrNone(
@@ -34,7 +33,7 @@ const getById = async (user, taskId) => {
       [taskId, user.id]
     );
 
-    if (!task) throw new ApiError(400, "bad request");
+    if (!task) throw new ApiError(400, errorTexts.common.badRequest);
 
     return mapToCamelCase.task(task);
   } catch (error) {
@@ -50,7 +49,8 @@ const create = async (
   startTime,
   endTime
 ) => {
-  if (!name) throw new ApiError(400, "name for task is required");
+  if (!name || !name.trim())
+    throw new ApiError(400, errorTexts.tasks.nameIsRequired);
   else name = name.trim();
 
   const taskToInsert = {
@@ -70,7 +70,8 @@ const create = async (
         taskToInsert
       );
 
-      if (!createdTask) throw new ApiError(500, "something went wrong");
+      if (!createdTask)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       const createdUsersTasks = await t.oneOrNone(
         "INSERT INTO users_tasks (user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *",
@@ -81,7 +82,7 @@ const create = async (
         await t.none("DELETE FROM tasks WHERE task_id=$1", [
           createdTask.task_id,
         ]);
-        throw new ApiError(500, "something went wrong");
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
       }
 
       return {
@@ -109,11 +110,11 @@ const edit = async (
   if (name) name = name.trim();
   if (description) description = description.trim();
 
-  if (!taskId || !checkIfIdIsValid(taskId))
-    throw new ApiError(400, "bad request");
-
   if (!name && !description && !dateToComplete && !startTime && !endTime)
     return;
+
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const result = await db.task(async (t) => {
@@ -125,10 +126,10 @@ const edit = async (
         [taskId, user.id]
       );
 
-      if (!taskToUpdate) throw new ApiError(400, "bad request");
+      if (!taskToUpdate) throw new ApiError(400, errorTexts.common.badRequest);
 
-      if (!taskToUpdate.access_level === accessLevels.view)
-        throw new ApiError(400, "bad reguest");
+      if (taskToUpdate.access_level === accessLevels.view)
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       if (name) taskToUpdate.name = name;
       if (description) taskToUpdate.description = description;
@@ -161,7 +162,8 @@ const edit = async (
         ]
       );
 
-      if (!updatedTask) throw new ApiError(500, "something went wrong");
+      if (!updatedTask)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return updatedTask;
     });
@@ -173,8 +175,8 @@ const edit = async (
 };
 
 const remove = async (user, taskId) => {
-  if (!taskId || !checkIfIdIsValid(taskId))
-    throw new ApiError(400, "bad request - invalid id");
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const result = await db.task(async (t) => {
@@ -184,14 +186,15 @@ const remove = async (user, taskId) => {
       );
 
       if (!usersTasks || usersTasks.access_level !== accessLevels.delete)
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       const removedTask = await t.oneOrNone(
         "DELETE FROM tasks WHERE task_id=$1 RETURNING *",
         [taskId]
       );
 
-      if (!removedTask) throw new ApiError(500, "somethin went wrong");
+      if (!removedTask)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return removedTask;
     });

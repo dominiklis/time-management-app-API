@@ -1,12 +1,16 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const validator = require("validator");
-const { accessLevels } = require("../utils/constants");
-const { checkIfIdIsValid, mapToCamelCase } = require("../utils");
+const { accessLevels, errorTexts } = require("../utils/constants");
+const {
+  mapToCamelCase,
+  validateId,
+  validateUsername,
+  validateEmail,
+} = require("../utils");
 
 const getUsers = async (user, projectId) => {
-  if (!projectId || !checkIfIdIsValid(projectId))
-    throw new ApiError(400, "bad request - invalid id");
+  if (!projectId || !validateId(projectId))
+    throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const usersProjects = await db.manyOrNone(
@@ -17,7 +21,7 @@ const getUsers = async (user, projectId) => {
     );
 
     if (!usersProjects.some((up) => up.user_id === user.id))
-      throw new ApiError(400, "bad request");
+      throw new ApiError(400, errorTexts.common.badRequest);
 
     return usersProjects.map((up) => mapToCamelCase.project(up));
   } catch (error) {
@@ -34,33 +38,45 @@ const create = async (
   accessLevel = accessLevels.view
 ) => {
   if (!userId && !userEmail && !userName)
-    throw new ApiError(400, "bad request");
+    throw new ApiError(400, errorTexts.common.badRequest);
 
-  if (!projectId || !checkIfIdIsValid(projectId))
-    throw new ApiError(400, "bad request - invalid project id");
+  if (!projectId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(projectId))
+    throw new ApiError(400, errorTexts.common.invalidId);
 
-  if (userId && !checkIfIdIsValid(userId))
-    throw new ApiError(400, "bad request - invalid user id");
+  if (userId && !validateId(userId))
+    throw new ApiError(400, errorTexts.common.invalidId);
 
-  if (userEmail && !validator.isEmail(userEmail))
-    throw new ApiError(400, "bad request");
+  if (userName && !validateUsername(userName))
+    throw new ApiError(400, errorTexts.users.invalidName);
+
+  if (userEmail && !validateEmail(userEmail))
+    throw new ApiError(400, errorTexts.users.invalidEmail);
+
+  if (
+    accessLevel !== accessLevels.view ||
+    accessLevel !== accessLevels.edit ||
+    accessLevel !== accessLevels.delete
+  )
+    throw new ApiError(400, errorTexts.access.invalidAccessLevel);
 
   try {
     const result = await db.task(async (t) => {
       const usersProjects = await t.oneOrNone(
-        `SELECT * FROM users_projects WHERE user_id=$1 AND project_id=$2;`,
+        `SELECT * FROM users_projects WHERE user_id=$1 AND project_id=$2`,
         [user.id, projectId]
       );
 
       if (!usersProjects || usersProjects.access_level === accessLevels.view)
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       if (!userId) {
         foundUser = await t.oneOrNone(
           `SELECT user_id FROM users WHERE name=$1 OR email=$2`,
           [userName, userEmail]
         );
-        if (!foundUser) throw new ApiError(400, "bad request tu");
+
+        if (!foundUser) throw new ApiError(400, errorTexts.common.badRequest);
       }
 
       userId = foundUser.user_id;
@@ -70,7 +86,8 @@ const create = async (
         [userId, projectId, accessLevel]
       );
 
-      if (!createdUP) throw new ApiError(500, "something went wrong");
+      if (!createdUP)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return createdUP;
     });
@@ -78,39 +95,40 @@ const create = async (
     return mapToCamelCase.project(result);
   } catch (error) {
     if (error?.code === "23505") {
-      throw new ApiError(
-        400,
-        "bad request - user arleady has access to this project"
-      );
+      throw new ApiError(400, errorTexts.access.userHasAccess);
     }
 
     if (error?.code === "23514") {
-      throw new ApiError(
-        400,
-        `bad request - invalid access level (valid are '${accessLevels.view}', '${accessLevels.edit}' or '${accessLevels.delete}')`
-      );
+      throw new ApiError(400, errorTexts.access.invalidAccessLevel);
     }
     throw error;
   }
 };
 
 const edit = async (user, projectId, userId, accessLevel) => {
-  if (!accessLevel) throw new ApiError(400, "bad request");
+  if (!accessLevel) throw new ApiError(400, errorTexts.common.badRequest);
 
-  if (!projectId || !checkIfIdIsValid(projectId))
-    throw new ApiError(400, "bad request - invalid task id");
+  if (
+    accessLevel !== accessLevels.view ||
+    accessLevel !== accessLevels.edit ||
+    accessLevel !== accessLevels.delete
+  )
+    throw new ApiError(400, errorTexts.access.invalidAccessLevel);
 
-  if (!userId || !checkIfIdIsValid(userId))
-    throw new ApiError(400, "bad request - invalid user id");
+  if (!projectId || !userId)
+    throw new ApiError(400, errorTexts.common.badRequest);
 
-  if (userId === user.id) throw new ApiError(400, "bad request");
+  if (!validateId(projectId) || !validateId(userId))
+    throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (userId === user.id) throw new ApiError(400, errorTexts.common.badRequest);
 
   try {
     const result = await db.task(async (t) => {
       const yoursUsersProjects = await t.oneOrNone(
         `SELECT up.*, ps.author_id FROM users_projects AS up
           LEFT JOIN projects AS ps ON up.project_id=ps.project_id
-            WHERE up.user_id=$1 AND up.project_id=$2;`,
+            WHERE up.user_id=$1 AND up.project_id=$2`,
         [user.id, projectId]
       );
 
@@ -118,21 +136,21 @@ const edit = async (user, projectId, userId, accessLevel) => {
         !yoursUsersProjects ||
         yoursUsersProjects.access_level === accessLevels.view
       )
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       if (
         yoursUsersProjects.access_level === accessLevels.edit &&
         accessLevel === accessLevels.delete
       )
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       if (userId === yoursUsersProjects.author_id)
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       const usersProjectsToUpdate = await t.oneOrNone(
         `SELECT up.*, ps.author_id FROM users_projects AS up
-            LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
-              WHERE up.user_id=$1 AND up.project_id=$2;`,
+          LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
+            WHERE up.user_id=$1 AND up.project_id=$2`,
         [userId, projectId]
       );
 
@@ -140,14 +158,15 @@ const edit = async (user, projectId, userId, accessLevel) => {
         yoursUsersProjects.access_level === accessLevels.edit &&
         usersProjectsToUpdate.access_level === accessLevels.delete
       )
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       const editedUP = await t.oneOrNone(
-        `UPDATE users_projects SET access_level=$1 WHERE project_id=$2 AND user_id=$3 RETURNING *;`,
+        `UPDATE users_projects SET access_level=$1 WHERE project_id=$2 AND user_id=$3 RETURNING *`,
         [accessLevel, projectId, userId]
       );
 
-      if (!editedUP) throw new ApiError(500, "something went wrong");
+      if (!editedUP)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return editedUP;
     });
@@ -165,18 +184,18 @@ const edit = async (user, projectId, userId, accessLevel) => {
 };
 
 const remove = async (user, projectId, userId) => {
-  if (!projectId || !checkIfIdIsValid(projectId))
-    throw new ApiError(400, "bad request - invalid task id");
+  if (!projectId || !userId)
+    throw new ApiError(400, errorTexts.common.badRequest);
 
-  if (!userId || !checkIfIdIsValid(userId))
-    throw new ApiError(400, "bad request - invalid user id");
+  if (!validateId(projectId) || !validateId(userId))
+    throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const result = await db.task(async (t) => {
       const yoursUsersProjects = await t.oneOrNone(
         `SELECT up.*, ps.author_id FROM users_projects AS up
           LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
-            WHERE up.user_id=$1 AND up.project_id=$2;`,
+            WHERE up.user_id=$1 AND up.project_id=$2`,
         [user.id, projectId]
       );
 
@@ -184,17 +203,18 @@ const remove = async (user, projectId, userId) => {
         !yoursUsersProjects ||
         yoursUsersProjects.access_level !== accessLevels.delete
       )
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       if (userId === yoursUsersProjects.author_id)
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       const removedUP = await t.oneOrNone(
-        `DELETE FROM users_projects WHERE project_id=$1 AND user_id=$2 RETURNING *;`,
+        `DELETE FROM users_projects WHERE project_id=$1 AND user_id=$2 RETURNING *`,
         [projectId, userId]
       );
 
-      if (!removedUP) throw new ApiError(500, "something went wrong");
+      if (!removedUP)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return removedUP;
     });

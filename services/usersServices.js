@@ -1,24 +1,14 @@
-const ApiError = require("../errors/ApiError");
 const db = require("../db");
+const ApiError = require("../errors/ApiError");
 const bcrypt = require("bcryptjs");
-const validator = require("validator");
 const jwt = require("jsonwebtoken");
-const { mapToCamelCase } = require("../utils");
-
-const validateUsername = (username) => {
-  if (!username) return false;
-  if (username.length < 3) return false;
-
-  return true;
-};
-
-const validateEmail = (email) => {
-  if (!email) return false;
-  return validator.isEmail(email);
-};
-
-const validatePassword = (password) =>
-  validator.isStrongPassword(password, { minLength: 6 });
+const { errorTexts } = require("../utils/constants");
+const {
+  mapToCamelCase,
+  validateUsername,
+  validateEmail,
+  validatePassword,
+} = require("../utils");
 
 const createToken = (id, name, email) =>
   jwt.sign({ id, name, email }, process.env.JWT_SECRET, {
@@ -27,25 +17,19 @@ const createToken = (id, name, email) =>
 
 const register = async (name, email, password) => {
   if (!name || !email || !password)
-    throw new ApiError(
-      400,
-      "name, email and password are required to register new user"
-    );
+    throw new ApiError(400, errorTexts.users.requiredRegisterFields);
 
   name = name.trim();
   const isUsernameValid = validateUsername(name);
-  if (!isUsernameValid) throw new ApiError(400, "invalid username");
+  if (!isUsernameValid) throw new ApiError(400, errorTexts.users.invalidName);
 
   email = email.trim();
   const isEmailValid = validateEmail(email);
-  if (!isEmailValid) throw new ApiError(400, "invalid email");
+  if (!isEmailValid) throw new ApiError(400, errorTexts.users.invalidEmail);
 
   const isPasswordValid = validatePassword(password);
   if (!isPasswordValid)
-    throw new ApiError(
-      400,
-      "invalid password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)"
-    );
+    throw new ApiError(400, errorTexts.users.invalidPassword);
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -56,7 +40,7 @@ const register = async (name, email, password) => {
       [name, email, hashedPassword]
     );
 
-    if (!newUser) throw new ApiError(500, "something went wrong");
+    if (!newUser) throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
     return {
       user: {
@@ -68,10 +52,7 @@ const register = async (name, email, password) => {
     };
   } catch (error) {
     if (error.code === "23505") {
-      throw new ApiError(
-        400,
-        "account with this username or email already exists"
-      );
+      throw new ApiError(400, errorTexts.users.accountAlreadyExists);
     }
     throw error;
   }
@@ -79,22 +60,15 @@ const register = async (name, email, password) => {
 
 const login = async (name, email, password) => {
   if ((!name && !email) || !password)
-    throw new ApiError(400, "password and email or username are required");
+    throw new ApiError(400, errorTexts.users.requiredLoginFields);
 
   const isUsernameValid = validateUsername(name);
   const isEmailValid = validateEmail(email);
   if (!isUsernameValid && !isEmailValid)
-    throw new ApiError(
-      400,
-      `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
-    );
+    throw new ApiError(400, errorTexts.users.invalidFields);
 
   const isPasswordValid = validatePassword(password);
-  if (!isPasswordValid)
-    throw new ApiError(
-      400,
-      `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
-    );
+  if (!isPasswordValid) throw new ApiError(400, errorTexts.users.invalidFields);
 
   try {
     const user = await db.oneOrNone(
@@ -102,18 +76,11 @@ const login = async (name, email, password) => {
       [name, email]
     );
 
-    if (!user)
-      throw new ApiError(
-        400,
-        `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
-      );
+    if (!user) throw new ApiError(400, errorTexts.users.invalidFields);
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid)
-      throw new ApiError(
-        400,
-        `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
-      );
+      throw new ApiError(400, errorTexts.users.invalidFields);
 
     return {
       user: {
@@ -140,19 +107,21 @@ const update = async (
   if (newName) {
     newName = newName.trim();
     const isNewNameValid = validateUsername(newName);
-    if (!isNewNameValid) throw new ApiError(400, "new username is invalid");
+    if (!isNewNameValid) throw new ApiError(400, errorTexts.users.invalidName);
   }
 
   if (newEmail) {
     newEmail = newEmail.trim();
     const isNewEmailValid = validateEmail(newEmail);
-    if (!isNewEmailValid) throw new ApiError(400, "new email is invalid");
+    if (!isNewEmailValid)
+      throw new ApiError(400, errorTexts.users.invalidEmail);
   }
 
   if (newPassword) {
     newPassword = newPassword.trim();
     const isNewPasswordValid = validatePassword(newPassword);
-    if (!isNewPasswordValid) throw new ApiError(400, "new password is invalid");
+    if (!isNewPasswordValid)
+      throw new ApiError(400, errorTexts.users.invalidPassword);
   }
 
   try {
@@ -171,7 +140,7 @@ const update = async (
         user.name !== userToUpdate.name ||
         user.email !== userToUpdate.email
       )
-        throw new ApiError(400, "bad request");
+        throw new ApiError(400, errorTexts.common.badRequest);
 
       let query = "name=$2, email=$3, password=$4";
       let params = [user.id];
@@ -203,7 +172,8 @@ const update = async (
 
       const updatedUser = await t.oneOrNone(query, params);
 
-      if (!updatedUser) throw new ApiError(500, "something went wrong");
+      if (!updatedUser)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return updatedUser;
     });
@@ -214,10 +184,7 @@ const update = async (
     };
   } catch (error) {
     if (error?.code === "23505")
-      throw new ApiError(
-        400,
-        "user with this email or username already exists"
-      );
+      throw new ApiError(400, errorTexts.users.emailOrUsernameTaken);
 
     throw error;
   }
@@ -230,10 +197,10 @@ const renew = async (user) => {
       [user.id]
     );
 
-    if (!userFromDb) throw new ApiError(400, "bad request");
+    if (!userFromDb) throw new ApiError(400, errorTexts.user.badRequest);
 
     if (user.name !== userFromDb.name || user.email !== userFromDb.email)
-      throw new ApiError(400, "bad request");
+      throw new ApiError(400, errorTexts.user.badRequest);
 
     return {
       user: {
