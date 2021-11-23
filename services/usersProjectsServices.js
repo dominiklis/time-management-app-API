@@ -9,7 +9,9 @@ const {
 } = require("../utils");
 
 const getUsers = async (user, projectId) => {
-  if (!projectId || !validateId(projectId))
+  if (!projectId) throw new ApiError(400, errorTexts.common.badRequest);
+
+  if (!validateId(projectId))
     throw new ApiError(400, errorTexts.common.invalidId);
 
   try {

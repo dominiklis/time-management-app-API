@@ -36,6 +36,7 @@ const errorTexts = {
 
   projects: {
     nameIsRequired: "name for project is required",
+    taskAlreadyAssigned: "the task has already been assigned to this project",
   },
 };
 

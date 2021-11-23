@@ -16,6 +16,12 @@ const {
   removeUsersAccess,
 } = require("../controllers/usersProjectsController");
 
+const {
+  getAssignedTasks,
+  assignTask,
+  removeAssignedTasks,
+} = require("../controllers/projectsTasksController");
+
 router.get("/", getProjects);
 router.get("/:id", getProjectById);
 router.post("/", createProject);
@@ -27,5 +33,10 @@ router.get("/:projectId/users", getUsersWithAccess);
 router.post("/:projectId/users", giveUserAccess);
 router.put("/:projectId/users/:userId", editUsersAccess);
 router.delete("/:projectId/users/:userId", removeUsersAccess);
+
+// projects_tasks
+router.get("/:projectId/tasks", getAssignedTasks);
+router.post("/:projectId/tasks", assignTask);
+router.delete("/:projectId/tasks/:taskId", removeAssignedTasks);
 
 module.exports = router;
