@@ -1,4 +1,3 @@
-const db = require("../db");
 const { usersServices } = require("../services");
 
 const register = async (req, res, next) => {

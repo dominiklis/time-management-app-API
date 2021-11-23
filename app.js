@@ -3,12 +3,12 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 5000;
 
-const morgan = require("morgan");
-
 const { usersRouter, tasksRouter, projectsRouter } = require("./routes");
 
+const morgan = require("morgan");
 const helmet = require("helmet");
 const cors = require("cors");
+
 const handleErrors = require("./middleware/handleErrors");
 const auth = require("./middleware/authMidlleware");
 

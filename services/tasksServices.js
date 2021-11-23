@@ -1,30 +1,12 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { accessLevels } = require("../constants");
+const { accessLevels } = require("../utils/constants");
 const checkIfIdIsValid = require("../utils/checkIfIdIsValid");
-
-const mapTaskToSnakeCase = (task) => {
-  return {
-    id: task.task_id,
-    authorId: task.author_id,
-    authorName: task.name,
-    authorEmail: task.email,
-    name: task.task_name,
-    description: task.task_description,
-    completed: task.task_completed,
-    createdAt: task.created_at,
-    completedAt: task.completed_at,
-    dateToComplete: task?.date_to_complete,
-    startTime: task.start_time,
-    endTime: task.end_time,
-    accessedAt: task.accessed_at,
-    accessLevel: task.access_level,
-  };
-};
+const { mapToCamelCase } = require("../utils");
 
 const get = async (user) => {
   try {
-    const { rows } = await db.query(
+    const tasks = await db.manyOrNone(
       `SELECT us.name, us.email, ts.*, ut.accessed_at, ut.access_level FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
           LEFT JOIN users AS us ON ts.author_id=us.user_id
@@ -32,8 +14,8 @@ const get = async (user) => {
       [user.id]
     );
 
-    const tasks = rows.map((task) => mapTaskToSnakeCase(task));
-    return tasks;
+    const tasksToReturn = tasks.map((task) => mapToCamelCase.task(task));
+    return tasksToReturn;
   } catch (error) {
     throw error;
   }
@@ -44,7 +26,7 @@ const getById = async (user, taskId) => {
     throw new ApiError(400, "bad request - invalid id");
 
   try {
-    const { rows } = await db.query(
+    const task = await db.oneOrNone(
       `SELECT us.name, us.email, ts.*, ut.accessed_at, ut.access_level FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
           LEFT JOIN users AS us ON ts.author_id=us.user_id
@@ -52,9 +34,9 @@ const getById = async (user, taskId) => {
       [taskId, user.id]
     );
 
-    if (rows.length === 0) throw new ApiError(400, "bad request");
+    if (!task) throw new ApiError(400, "bad request");
 
-    return mapTaskToSnakeCase(rows[0]);
+    return mapToCamelCase.task(task);
   } catch (error) {
     throw error;
   }
@@ -71,59 +53,45 @@ const create = async (
   if (!name) throw new ApiError(400, "name for task is required");
   else name = name.trim();
 
-  const columns = ["author_id", "task_name"];
-  const values = ["$1", "$2"];
-  const params = [user.id, name];
+  const taskToInsert = {
+    author_id: user.id,
+    task_name: name,
+  };
+
+  if (description) taskToInsert.task_description = description.trim();
+  if (dateToComplete) taskToInsert.date_to_complete = dateToComplete;
+  if (startTime) taskToInsert.start_time = startTime;
+  if (endTime) taskToInsert.end_time = endTime;
 
   try {
-    if (description) {
-      description = description.trim();
-      columns.push("task_description");
-      values.push(`$${values.length + 1}`);
-      params.push(description);
-    }
+    const result = await db.task(async (t) => {
+      const createdTask = await t.oneOrNone(
+        "INSERT INTO tasks (${this:name}) VALUES(${this:csv}) RETURNING *",
+        taskToInsert
+      );
 
-    if (dateToComplete) {
-      columns.push("date_to_complete");
-      values.push(`$${values.length + 1}`);
-      params.push(dateToComplete);
-    }
+      if (!createdTask) throw new ApiError(500, "something went wrong");
 
-    if (startTime) {
-      columns.push("start_time");
-      values.push(`$${values.length + 1}`);
-      params.push(startTime);
-    }
+      const createdUsersTasks = await t.oneOrNone(
+        "INSERT INTO users_tasks (user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *",
+        [user.id, createdTask.task_id, accessLevels.delete]
+      );
 
-    if (endTime) {
-      columns.push("end_time");
-      values.push(`$${values.length + 1}`);
-      params.push(endTime);
-    }
+      if (!createdUsersTasks) {
+        await t.none("DELETE FROM tasks WHERE task_id=$1", [
+          createdTask.task_id,
+        ]);
+        throw new ApiError(500, "something went wrong");
+      }
 
-    let query = `INSERT INTO tasks (${columns.join(
-      ", "
-    )}) VALUES (${values.join(", ")}) RETURNING *;`;
-
-    const { rows } = await db.query(query, params);
-
-    if (rows[0].length === 0) throw new ApiError(500, "something went wrong");
-
-    const { rows: usersTasksRows } = await db.query(
-      "INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *;",
-      [user.id, rows[0].task_id, accessLevels.delete]
-    );
-
-    if (usersTasksRows.length === 0) {
-      await db.query("DELETE FROM tasks WHERE task_id=$1", [rows[0].task_id]);
-      throw new ApiError(500, "something went wrong");
-    }
-
-    return mapTaskToSnakeCase({
-      ...rows[0],
-      accessed_at: usersTasksRows[0].accessed_at,
-      access_level: usersTasksRows[0].access_level,
+      return {
+        ...createdTask,
+        accessed_at: createdUsersTasks.accessed_at,
+        access_level: createdUsersTasks.access_level,
+      };
     });
+
+    return mapToCamelCase.task(result);
   } catch (error) {
     throw error;
   }
@@ -141,53 +109,64 @@ const edit = async (
   if (name) name = name.trim();
   if (description) description = description.trim();
 
-  if (!taskId || checkIfIdIsValid(taskId))
+  if (!taskId || !checkIfIdIsValid(taskId))
     throw new ApiError(400, "bad request");
 
   if (!name && !description && !dateToComplete && !startTime && !endTime)
     return;
 
   try {
-    const taskToEdit = await getById(user, taskId);
+    const result = await db.task(async (t) => {
+      const taskToUpdate = await t.oneOrNone(
+        `SELECT us.name, us.email, ts.*, ut.access_level FROM 
+          users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
+            LEFT JOIN users AS us ON ts.author_id=us.user_id
+              WHERE ts.task_id=$1 AND ut.user_id=$2`,
+        [taskId, user.id]
+      );
 
-    if (name) taskToEdit.name = name;
+      if (!taskToUpdate) throw new ApiError(400, "bad request");
 
-    if (description) taskToEdit.description = description;
+      if (!taskToUpdate.access_level === accessLevels.view)
+        throw new ApiError(400, "bad reguest");
 
-    if (dateToComplete) taskToEdit.dateToComplete = dateToComplete;
+      if (name) taskToUpdate.name = name;
+      if (description) taskToUpdate.description = description;
+      if (dateToComplete) taskToUpdate.date_to_complete = dateToComplete;
+      if (startTime) taskToUpdate.star_tTime = startTime;
+      if (endTime) taskToUpdate.end_time = endTime;
 
-    if (startTime) taskToEdit.startTime = startTime;
+      const updatedTask = await t.oneOrNone(
+        `UPDATE tasks AS ts SET
+          task_name=$5,
+          task_description=$6,
+          date_to_complete=$7,
+          start_time=$8,
+          end_time=$9
+            FROM users_tasks AS ut
+              WHERE ts.task_id = ut.task_id
+                AND ut.user_id=$1
+                AND (ut.access_level=$2 OR ut.access_level=$3)
+                AND ts.task_id=$4 RETURNING *`,
+        [
+          user.id,
+          accessLevels.edit,
+          accessLevels.delete,
+          taskId,
+          taskToUpdate.name,
+          taskToUpdate.description,
+          taskToUpdate.dateToComplete,
+          taskToUpdate.startTime,
+          taskToUpdate.endTime,
+        ]
+      );
 
-    if (endTime) taskToEdit.endTime = endTime;
+      if (!updatedTask) throw new ApiError(500, "something went wrong");
 
-    const { rows } = await db.query(
-      `UPDATE tasks AS ts SET 
-        task_name=$5,  
-        task_description=$6,
-        date_to_complete=$7,
-        start_time=$8,
-        end_time=$9
-          FROM users_tasks AS ut 
-            WHERE ts.task_id = ut.task_id 
-              AND ut.user_id=$1
-              AND (ut.access_level=$2 OR ut.access_level=$3) 
-              AND ts.task_id=$4 RETURNING *`,
-      [
-        user.id,
-        accessLevels.edit,
-        accessLevels.delete,
-        taskId,
-        taskToEdit.name,
-        taskToEdit.description,
-        taskToEdit.dateToComplete,
-        taskToEdit.startTime,
-        taskToEdit.endTime,
-      ]
-    );
+      return updatedTask;
+    });
 
-    if (rows.length === 0) throw new ApiError(400, "bad request");
-
-    return mapTaskToSnakeCase(rows[0]);
+    return result;
   } catch (error) {
     throw error;
   }
@@ -198,25 +177,26 @@ const remove = async (user, taskId) => {
     throw new ApiError(400, "bad request - invalid id");
 
   try {
-    const { rows: usersTasksRows } = await db.query(
-      `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
-      [user.id, taskId]
-    );
+    const result = await db.task(async (t) => {
+      const usersTasks = await t.oneOrNone(
+        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
+        [user.id, taskId]
+      );
 
-    if (
-      usersTasksRows.length === 0 ||
-      usersTasksRows[0].access_level !== accessLevels.delete
-    )
-      throw new ApiError(400, "bad request");
+      if (!usersTasks || usersTasks.access_level !== accessLevels.delete)
+        throw new ApiError(400, "bad request");
 
-    const { rows } = await db.query(
-      "DELETE FROM tasks WHERE task_id=$1 RETURNING *;",
-      [taskId]
-    );
+      const removedTask = await t.oneOrNone(
+        "DELETE FROM tasks WHERE task_id=$1 RETURNING *",
+        [taskId]
+      );
 
-    if (rows.length === 0) throw new ApiError(400, "bad request");
+      if (!removedTask) throw new ApiError(500, "somethin went wrong");
 
-    return mapTaskToSnakeCase(rows[0]);
+      return removedTask;
+    });
+
+    return mapToCamelCase.task(result);
   } catch (error) {
     throw error;
   }

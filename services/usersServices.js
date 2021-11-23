@@ -3,6 +3,7 @@ const db = require("../db");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
 const jwt = require("jsonwebtoken");
+const { mapToCamelCase } = require("../utils");
 
 const validateUsername = (username) => {
   if (!username) return false;
@@ -50,20 +51,20 @@ const register = async (name, email, password) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const { rows } = await db.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *",
+    const newUser = await db.oneOrNone(
+      `INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *`,
       [name, email, hashedPassword]
     );
 
-    if (rows.length === 0) throw new ApiError(500, "something went wrong");
+    if (!newUser) throw new ApiError(500, "something went wrong");
 
     return {
       user: {
-        id: rows[0].user_id,
-        name: rows[0].name,
-        email: rows[0].email,
+        id: newUser.user_id,
+        name: newUser.name,
+        email: newUser.email,
       },
-      token: createToken(rows[0].user_id, name, email),
+      token: createToken(newUser.user_id, name, email),
     };
   } catch (error) {
     if (error.code === "23505") {
@@ -83,42 +84,44 @@ const login = async (name, email, password) => {
   const isUsernameValid = validateUsername(name);
   const isEmailValid = validateEmail(email);
   if (!isUsernameValid && !isEmailValid)
-    throw new ApiError(400, "invalid username or email");
+    throw new ApiError(
+      400,
+      `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
+    );
 
   const isPasswordValid = validatePassword(password);
   if (!isPasswordValid)
     throw new ApiError(
       400,
-      "invalid password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)"
+      `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
     );
 
   try {
-    let query = "";
-    const params = [];
-    if (isEmailValid) {
-      query = "SELECT * FROM users WHERE email=$1";
-      params.push(email);
-    } else {
-      query = "SELECT * FROM users WHERE name=$1";
-      params.push(name);
-    }
+    const user = await db.oneOrNone(
+      `SELECT * FROM users WHERE name=$1 OR email=$2`,
+      [name, email]
+    );
 
-    const { rows } = await db.query(query, params);
+    if (!user)
+      throw new ApiError(
+        400,
+        `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
+      );
 
-    if (rows.length === 0)
-      throw new ApiError(400, "invalid username, email or password");
-
-    const isPasswordValid = await bcrypt.compare(password, rows[0].password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid)
-      throw new ApiError(400, "invalid username, email or password");
+      throw new ApiError(
+        400,
+        `invalid username, email or password (min. 6 characters long with 1 uppercase letter, 1 lowercase, 1 number and 1 symbol)`
+      );
 
     return {
       user: {
-        id: rows[0].user_id,
-        name: rows[0].name,
-        email: rows[0].email,
+        id: user.user_id,
+        name: user.name,
+        email: user.email,
       },
-      token: createToken(rows[0].user_id, rows[0].name, rows[0].email),
+      token: createToken(user.user_id, user.name, user.email),
     };
   } catch (error) {
     throw error;
@@ -126,7 +129,7 @@ const login = async (name, email, password) => {
 };
 
 const update = async (
-  loggedUser,
+  user,
   newName,
   newEmail,
   newPassword,
@@ -153,77 +156,92 @@ const update = async (
   }
 
   try {
-    const { rows } = await db.query("SELECT * FROM users WHERE user_id=$1;", [
-      loggedUser.id,
-    ]);
+    const result = await db.task(async (t) => {
+      const userToUpdate = await t.one(`SELECT * FROM users WHERE user_id=$1`, [
+        user.id,
+      ]);
 
-    const isPasswordValid = await bcrypt.compare(
-      currentPassword,
-      rows[0].password
-    );
+      const isPasswordValid = await bcrypt.compare(
+        currentPassword,
+        userToUpdate.password
+      );
 
-    if (
-      !isPasswordValid ||
-      loggedUser.name !== rows[0].name ||
-      loggedUser.email !== rows[0].email
-    )
-      throw new ApiError(400, "bad request");
+      if (
+        !isPasswordValid ||
+        user.name !== userToUpdate.name ||
+        user.email !== userToUpdate.email
+      )
+        throw new ApiError(400, "bad request");
 
-    let query = "name=$2, email=$3, password=$4";
-    let params = [loggedUser.id];
+      let query = "name=$2, email=$3, password=$4";
+      let params = [user.id];
 
-    if (newName) {
-      params.push(newName);
-      query = query + ", name_updated=CURRENT_TIMESTAMP";
-    } else {
-      params.push(rows[0].name);
-    }
+      if (newName) {
+        params.push(newName);
+        query = query + ", name_updated=CURRENT_TIMESTAMP";
+      } else {
+        params.push(userToUpdate.name);
+      }
 
-    if (newEmail) {
-      params.push(newEmail);
-      query = query + ", email_updated=CURRENT_TIMESTAMP";
-    } else {
-      params.push(rows[0].email);
-    }
+      if (newEmail) {
+        params.push(newEmail);
+        query = query + ", email_updated=CURRENT_TIMESTAMP";
+      } else {
+        params.push(userToUpdate.email);
+      }
 
-    if (newPassword) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedNewPassword = await bcrypt.hash(newPassword, salt);
-      params.push(hashedNewPassword);
-      query = query + ", password_updated=CURRENT_TIMESTAMP";
-    } else {
-      params.push(rows[0].password);
-    }
+      if (newPassword) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+        params.push(hashedNewPassword);
+        query = query + ", password_updated=CURRENT_TIMESTAMP";
+      } else {
+        params.push(userToUpdate.password);
+      }
 
-    const { rows: updated } = await db.query(
-      `UPDATE users SET ${query} WHERE user_id=$1 RETURNING *;`,
-      params
-    );
+      query = `UPDATE users SET ${query} WHERE user_id=$1 RETURNING *`;
 
-    if (updated.length === 0) throw new ApiError(500, "something went wrong");
+      const updatedUser = await t.oneOrNone(query, params);
 
-    return updated;
+      if (!updatedUser) throw new ApiError(500, "something went wrong");
+
+      return updatedUser;
+    });
+
+    return {
+      user: mapToCamelCase.user(result),
+      token: createToken(result.user_id, result.name, result.email),
+    };
   } catch (error) {
+    if (error?.code === "23505")
+      throw new ApiError(
+        400,
+        "user with this email or username already exists"
+      );
+
     throw error;
   }
 };
 
 const renew = async (user) => {
   try {
-    const { rows } = await db.query("SELECT * FROM users WHERE user_id=$1", [
-      user.id,
-    ]);
+    const userFromDb = await db.oneOrNone(
+      "SELECT * FROM users WHERE user_id=$1",
+      [user.id]
+    );
 
-    if (user.name !== rows[0].name || user.email !== rows[0].email)
+    if (!userFromDb) throw new ApiError(400, "bad request");
+
+    if (user.name !== userFromDb.name || user.email !== userFromDb.email)
       throw new ApiError(400, "bad request");
 
     return {
       user: {
-        id: rows[0].user_id,
-        name: rows[0].name,
-        email: rows[0].email,
+        id: userFromDb.user_id,
+        name: userFromDb.name,
+        email: userFromDb.email,
       },
-      token: createToken(rows[0].user_id, rows[0].name, rows[0].email),
+      token: createToken(userFromDb.user_id, userFromDb.name, userFromDb.email),
     };
   } catch (error) {
     throw error;

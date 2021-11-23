@@ -1,31 +1,25 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { accessLevels } = require("../constants");
 const validator = require("validator");
-const {
-  getUserId,
-  mapUsersAccessToCamelCase,
-  checkIfIdIsValid,
-} = require("../utils");
+const { accessLevels } = require("../utils/constants");
+const { checkIfIdIsValid, mapToCamelCase } = require("../utils");
 
 const getUsers = async (user, taskId) => {
   if (!taskId || !checkIfIdIsValid(taskId))
     throw new ApiError(400, "bad request - invalid id");
 
   try {
-    const { rows } = await db.query(
+    const users = await db.manyOrNone(
       `SELECT ut.task_id, us.name, us.email, us.user_id, ut.accessed_at, ut.access_level FROM users_tasks AS ut 
         LEFT JOIN users AS us ON ut.user_id = us.user_id
           WHERE task_id=$1`,
       [taskId]
     );
 
-    if (!rows.some((ut) => ut.user_id === user.id))
+    if (!users.some((ut) => ut.user_id === user.id))
       throw new ApiError(400, "bad request");
 
-    const usersTasks = rows.map((userTask) =>
-      mapUsersAccessToCamelCase(userTask)
-    );
+    const usersTasks = users.map((ut) => mapToCamelCase.user(ut));
     return usersTasks;
   } catch (error) {
     throw error;
@@ -53,28 +47,36 @@ const create = async (
     throw new ApiError(400, "bad request");
 
   try {
-    const { rows } = await db.query(
-      `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2;`,
-      [user.id, taskId]
-    );
+    const result = await db.task(async (t) => {
+      const usersTasks = await t.oneOrNone(
+        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2;`,
+        [user.id, taskId]
+      );
 
-    if (rows.length === 0 || rows[0].access_level === accessLevels.view)
-      throw new ApiError(400, "bad request");
+      if (!usersTasks || usersTasks.access_level === accessLevels.view)
+        throw new ApiError(400, "bad request");
 
-    if (!userId) {
-      userId = await getUserId(userEmail, userName);
-      if (!userId) throw new ApiError(400, "bad request");
-    }
+      if (!userId) {
+        foundUser = await t.oneOrNone(
+          `SELECT user_id FROM users WHERE name=$1 OR email=$2`,
+          [userName, userEmail]
+        );
+        if (!foundUser) throw new ApiError(400, "bad request tu");
+      }
 
-    const { rows: createdUTRows } = await db.query(
-      `INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *`,
-      [userId, taskId, accessLevel]
-    );
+      userId = foundUser.user_id;
 
-    if (createdUTRows.length === 0)
-      throw new ApiError(500, "something went wrong");
+      const createdUT = await t.oneOrNone(
+        `INSERT INTO users_tasks(user_id, task_id, access_level) VALUES ($1, $2, $3) RETURNING *`,
+        [userId, taskId, accessLevel]
+      );
 
-    return mapUsersAccessToCamelCase(createdUTRows[0]);
+      if (!createdUT) throw new ApiError(500, "something went wrong");
+
+      return createdUT;
+    });
+
+    return mapToCamelCase.user(result);
   } catch (error) {
     if (error?.code === "23505") {
       throw new ApiError(
@@ -102,34 +104,56 @@ const edit = async (user, taskId, userId, accessLevel) => {
   if (!userId || !checkIfIdIsValid(userId))
     throw new ApiError(400, "bad request - invalid user id");
 
+  if (userId === user.id) throw new ApiError(400, "bad request");
+
   try {
-    const { rows } = await db.query(
-      `SELECT ut.*, ts.author_id FROM users_tasks AS ut
-        LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
-          WHERE ut.user_id=$1 AND ut.task_id=$2;`,
-      [user.id, taskId]
-    );
+    const result = await db.task(async (t) => {
+      const yoursUsersTasks = await t.oneOrNone(
+        `SELECT ut.*, ts.author_id FROM users_tasks AS ut
+          LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
+            WHERE ut.user_id=$1 AND ut.task_id=$2;`,
+        [user.id, taskId]
+      );
 
-    if (rows.length === 0 || rows[0].access_level === accessLevels.view)
-      throw new ApiError(400, "bad request");
+      if (
+        !yoursUsersTasks ||
+        yoursUsersTasks.access_level === accessLevels.view
+      )
+        throw new ApiError(400, "bad request");
 
-    if (
-      rows[0].access_level === accessLevels.edit &&
-      accessLevel === accessLevels.delete
-    )
-      throw new ApiError(400, "bad request");
+      if (
+        yoursUsersTasks.access_level === accessLevels.edit &&
+        accessLevel === accessLevels.delete
+      )
+        throw new ApiError(400, "bad request");
 
-    if (userId === rows[0].author_id) throw new ApiError(400, "bad request");
+      if (userId === yoursUsersTasks.author_id)
+        throw new ApiError(400, "bad request");
 
-    const { rows: editedUTRows } = await db.query(
-      `UPDATE users_tasks SET access_level=$1 WHERE task_id=$2 AND user_id=$3 RETURNING *;`,
-      [accessLevel, taskId, userId]
-    );
+      const usersTasksToUpdate = await t.oneOrNone(
+        `SELECT ut.*, ts.author_id FROM users_tasks AS ut
+            LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
+              WHERE ut.user_id=$1 AND ut.task_id=$2;`,
+        [userId, taskId]
+      );
 
-    if (editedUTRows.length === 0)
-      throw new ApiError(500, "something went wrong");
+      if (
+        yoursUsersTasks.access_level === accessLevels.edit &&
+        usersTasksToUpdate.access_level === accessLevels.delete
+      )
+        throw new ApiError(400, "bad request");
 
-    return mapUsersAccessToCamelCase(editedUTRows[0]);
+      const editedUT = await t.oneOrNone(
+        `UPDATE users_tasks SET access_level=$1 WHERE task_id=$2 AND user_id=$3 RETURNING *`,
+        [accessLevel, taskId, userId]
+      );
+
+      if (!editedUT) throw new ApiError(500, "something went wrong");
+
+      return editedUT;
+    });
+
+    return mapToCamelCase.user(result);
   } catch (error) {
     if (error?.code === "23514") {
       throw new ApiError(
@@ -149,24 +173,34 @@ const remove = async (user, taskId, userId) => {
     throw new ApiError(400, "bad request - invalid user id");
 
   try {
-    const { rows } = await db.query(
-      `SELECT ut.*, ts.author_id FROM users_tasks AS ut
-        LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
-          WHERE ut.user_id=$1 AND ut.task_id=$2;`,
-      [user.id, taskId]
-    );
+    const result = await db.task(async (t) => {
+      const yoursUsersTasks = await t.oneOrNone(
+        `SELECT ut.*, ts.author_id FROM users_tasks AS ut
+          LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id
+            WHERE ut.user_id=$1 AND ut.task_id=$2;`,
+        [user.id, taskId]
+      );
 
-    if (userId === rows[0].author_id) throw new ApiError(400, "bad request");
+      if (
+        !yoursUsersTasks ||
+        yoursUsersTasks.access_level !== accessLevels.delete
+      )
+        throw new ApiError(400, "bad request");
 
-    if (rows.length === 0 || rows[0].access_level !== accessLevels.delete)
-      throw new ApiError(400, "bad request");
+      if (userId === yoursUsersTasks.author_id)
+        throw new ApiError(400, "bad request");
 
-    const { rows: removedUTRows } = await db.query(
-      `DELETE FROM users_tasks WHERE task_id=$1 AND user_id=$2 RETURNING *;`,
-      [taskId, userId]
-    );
+      const removedUT = await t.oneOrNone(
+        `DELETE FROM users_tasks WHERE task_id=$1 AND user_id=$2 RETURNING *`,
+        [taskId, userId]
+      );
 
-    return mapUsersAccessToCamelCase(removedUTRows[0]);
+      if (!removedUT) throw new ApiError(500, "something went wrong");
+
+      return removedUT;
+    });
+
+    return mapToCamelCase.user(result);
   } catch (error) {
     throw error;
   }
