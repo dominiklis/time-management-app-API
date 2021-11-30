@@ -40,7 +40,8 @@ const createTask = async (req, res, next) => {
 };
 
 const editTask = async (req, res, next) => {
-  const { name, description, dateToComplete, startTime, endTime } = req.body;
+  const { name, description, completed, dateToComplete, startTime, endTime } =
+    req.body;
   const { id } = req.params;
 
   try {
@@ -49,6 +50,7 @@ const editTask = async (req, res, next) => {
       id,
       name,
       description,
+      completed,
       dateToComplete,
       startTime,
       endTime

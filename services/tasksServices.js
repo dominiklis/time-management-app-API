@@ -103,6 +103,7 @@ const edit = async (
   taskId,
   name,
   description,
+  completed,
   dateToComplete,
   startTime,
   endTime
@@ -110,7 +111,14 @@ const edit = async (
   if (name) name = name.trim();
   if (description) description = description.trim();
 
-  if (!name && !description && !dateToComplete && !startTime && !endTime)
+  if (
+    !name &&
+    !description &&
+    !dateToComplete &&
+    !startTime &&
+    !endTime &&
+    typeof completed !== "boolean"
+  )
     return;
 
   if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
@@ -131,19 +139,32 @@ const edit = async (
       if (taskToUpdate.access_level === accessLevels.view)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      if (name) taskToUpdate.name = name;
-      if (description) taskToUpdate.description = description;
+      let additionalUpdates = "";
+
+      if (name) taskToUpdate.task_name = name;
+
+      if (description) taskToUpdate.task_description = description;
+
+      if (completed === false || completed) {
+        taskToUpdate.task_completed = completed;
+        if (completed) additionalUpdates += ", completed_at=CURRENT_TIMESTAMP";
+        else additionalUpdates += ", completed_at=NULL";
+      }
       if (dateToComplete) taskToUpdate.date_to_complete = dateToComplete;
-      if (startTime) taskToUpdate.star_tTime = startTime;
+
+      if (startTime) taskToUpdate.start_time = startTime;
+
       if (endTime) taskToUpdate.end_time = endTime;
 
       const updatedTask = await t.oneOrNone(
         `UPDATE tasks AS ts SET
           task_name=$5,
           task_description=$6,
-          date_to_complete=$7,
-          start_time=$8,
-          end_time=$9
+          task_completed=$7,
+          date_to_complete=$8,
+          start_time=$9,
+          end_time=$10
+          ${additionalUpdates}
             FROM users_tasks AS ut
               WHERE ts.task_id = ut.task_id
                 AND ut.user_id=$1
@@ -154,11 +175,12 @@ const edit = async (
           accessLevels.edit,
           accessLevels.delete,
           taskId,
-          taskToUpdate.name,
-          taskToUpdate.description,
-          taskToUpdate.dateToComplete,
-          taskToUpdate.startTime,
-          taskToUpdate.endTime,
+          taskToUpdate.task_name,
+          taskToUpdate.task_description,
+          taskToUpdate.task_completed,
+          taskToUpdate.date_to_complete,
+          taskToUpdate.start_time,
+          taskToUpdate.end_time,
         ]
       );
 
