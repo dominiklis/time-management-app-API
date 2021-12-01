@@ -56,7 +56,7 @@ const editTask = async (req, res, next) => {
       endTime
     );
 
-    res.status(204).json(result);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

@@ -187,7 +187,7 @@ const edit = async (
       if (!updatedTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      return updatedTask;
+      return mapToCamelCase.task(updatedTask);
     });
 
     return result;
