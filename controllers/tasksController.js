@@ -68,7 +68,7 @@ const deleteTask = async (req, res, next) => {
   try {
     const result = await tasksServices.remove(req.user, id);
 
-    res.status(204).json(result);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

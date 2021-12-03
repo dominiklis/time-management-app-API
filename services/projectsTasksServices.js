@@ -11,10 +11,10 @@ const getTasks = async (user, projectId) => {
 
   try {
     const result = await db.task(async (t) => {
-      const loggedUserUP = await t.oneOrNone(`SELECT * from users_projects`, [
-        user.id,
-        projectId,
-      ]);
+      const loggedUserUP = await t.oneOrNone(
+        `SELECT * from users_projects WHERE user_id=$1 AND project_id=$2`,
+        [user.id, projectId]
+      );
 
       if (!loggedUserUP) throw new ApiError(400, errorTexts.common.badRequest);
 
@@ -32,7 +32,7 @@ const getTasks = async (user, projectId) => {
       return projectsUsers;
     });
 
-    return result.map((pt) => mapToCamelCase.projectsTasks(pt));
+    return result.map((pt) => mapToCamelCase(pt));
   } catch (error) {
     throw error;
   }
@@ -52,7 +52,7 @@ const create = async (user, projectId, taskId) => {
         [user.id, projectId]
       );
 
-      if (!loggedUserUP || loggedUserUP.access_level === accessLevels.view)
+      if (!loggedUserUP || !loggedUserUP.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const loggedUserUT = await t.oneOrNone(
@@ -60,7 +60,7 @@ const create = async (user, projectId, taskId) => {
         [user.id, taskId]
       );
 
-      if (!loggedUserUT || loggedUserUT.access_level === accessLevels.view)
+      if (!loggedUserUT || !loggedUserUT.can_share || !loggedUserUT.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const createdPT = await t.oneOrNone(
@@ -74,7 +74,7 @@ const create = async (user, projectId, taskId) => {
       return createdPT;
     });
 
-    return mapToCamelCase.projectsTasks(result);
+    return mapToCamelCase(result);
   } catch (error) {
     if (error?.code === "23505")
       throw new ApiError(400, errorTexts.projects.taskAlreadyAssigned);
@@ -96,7 +96,7 @@ const remove = async (user, projectId, taskId) => {
         [user.id, projectId]
       );
 
-      if (!loggedUserUP || loggedUserUP.access_level === accessLevels.view)
+      if (!loggedUserUP || !loggedUserUP.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const removedPT = await t.oneOrNone(
@@ -110,7 +110,7 @@ const remove = async (user, projectId, taskId) => {
       return removedPT;
     });
 
-    return mapToCamelCase.projectsTasks(result);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

@@ -1,19 +1,19 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { accessLevels, errorTexts } = require("../utils/constants");
+const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
 
 const get = async (user) => {
   try {
     const projects = await db.manyOrNone(
-      `SELECT us.name, us.email, ps.*, up.accessed_at, up.access_level FROM 
+      `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
         users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
           LEFT JOIN users AS us ON ps.author_id=us.user_id
             WHERE up.user_id=$1`,
       [user.id]
     );
 
-    return projects.map((project) => mapToCamelCase.project(project));
+    return projects.map((project) => mapToCamelCase(project));
   } catch (error) {
     throw error;
   }
@@ -25,7 +25,7 @@ const getById = async (user, projectId) => {
 
   try {
     const project = await db.oneOrNone(
-      `SELECT us.name, us.email, ps.*, up.accessed_at, up.access_level FROM 
+      `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
         users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
           LEFT JOIN users AS us ON ps.author_id=us.user_id
             WHERE up.user_id=$1 AND ps.project_id=$2`,
@@ -34,7 +34,7 @@ const getById = async (user, projectId) => {
 
     if (!project) throw new ApiError(400, errorTexts.common.badRequest);
 
-    return mapToCamelCase.project(project);
+    return mapToCamelCase(project);
   } catch (error) {
     throw error;
   }
@@ -63,8 +63,9 @@ const create = async (user, name, description) => {
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       const createdUsersProjects = await t.oneOrNone(
-        "INSERT INTO users_projects (user_id, project_id, access_level) VALUES ($1, $2, $3) RETURNING *",
-        [user.id, createdProject.project_id, accessLevels.delete]
+        `INSERT INTO users_projects (user_id, project_id, can_share, can_change_permissions, can_edit, can_delete) 
+          VALUES ($1, $2, $3, $3, $3, $3) RETURNING *`,
+        [user.id, createdProject.project_id, true]
       );
 
       if (!createdUsersProjects) {
@@ -76,12 +77,11 @@ const create = async (user, name, description) => {
 
       return {
         ...createdProject,
-        accessed_at: createdUsersProjects.accessed_at,
-        access_level: createdUsersProjects.access_level,
+        ...createdUsersProjects,
       };
     });
 
-    return mapToCamelCase.project(result);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }
@@ -98,8 +98,8 @@ const edit = async (user, projectId, name, description) => {
 
   try {
     const result = await db.task(async (t) => {
-      const projectToUpdate = await t.oneOrNone(
-        `SELECT us.name, us.email, ps.*, up.accessed_at, up.access_level FROM 
+      let projectToUpdate = await t.oneOrNone(
+        `SELECT us.name, us.email, ps.*, up.* FROM 
           users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
             LEFT JOIN users AS us ON ps.author_id=us.user_id
               WHERE up.user_id=$1 AND ps.project_id=$2;`,
@@ -109,28 +109,28 @@ const edit = async (user, projectId, name, description) => {
       if (!projectToUpdate)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      if (!projectToUpdate.access_level === accessLevels.view)
+      projectToUpdate = mapToCamelCase(projectToUpdate);
+
+      if (!projectToUpdate.canEdit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      if (name) projectToUpdate.name = name;
-      if (description) projectToUpdate.description = description;
+      if (name) projectToUpdate.projectName = name;
+      if (description) projectToUpdate.projectDescription = description;
 
       const updatedProject = await t.oneOrNone(
         `UPDATE projects AS ps SET
-          project_name=$5,
-          project_description=$6
+          project_name=$3,
+          project_description=$4
             FROM users_projects AS up
               WHERE ps.project_id = up.project_id
                 AND up.user_id=$1
-                AND (up.access_level=$2 OR up.access_level=$3)
-                AND ps.project_id=$4 RETURNING *`,
+                AND up.can_edit=true
+                AND ps.project_id=$2 RETURNING *`,
         [
           user.id,
-          accessLevels.edit,
-          accessLevels.delete,
           projectId,
-          projectToUpdate.name,
-          projectToUpdate.description,
+          projectToUpdate.projectName,
+          projectToUpdate.projectDescription,
         ]
       );
 
@@ -140,7 +140,7 @@ const edit = async (user, projectId, name, description) => {
       return updatedProject;
     });
 
-    return mapToCamelCase.project(result);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }
@@ -157,7 +157,7 @@ const remove = async (user, projectId) => {
         [user.id, projectId]
       );
 
-      if (!usersProjects || usersProjects.access_level !== accessLevels.delete)
+      if (!usersProjects || !usersProjects.can_delete)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const removedProject = await t.oneOrNone(
@@ -171,7 +171,7 @@ const remove = async (user, projectId) => {
       return removedProject;
     });
 
-    return mapToCamelCase.project(result);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

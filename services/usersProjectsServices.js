@@ -1,6 +1,6 @@
 const db = require("../db");
 const ApiError = require("../errors/ApiError");
-const { accessLevels, errorTexts } = require("../utils/constants");
+const { errorTexts } = require("../utils/constants");
 const {
   mapToCamelCase,
   validateId,
@@ -16,7 +16,7 @@ const getUsers = async (user, projectId) => {
 
   try {
     const usersProjects = await db.manyOrNone(
-      `SELECT up.project_id, us.name, us.email, us.user_id, up.accessed_at, up.access_level FROM users_projects AS up 
+      `SELECT up.project_id, us.name, us.email, us.user_id, up.* FROM users_projects AS up 
         LEFT JOIN users AS us ON up.user_id = us.user_id
           WHERE project_id=$1`,
       [projectId]
@@ -25,7 +25,7 @@ const getUsers = async (user, projectId) => {
     if (!usersProjects.some((up) => up.user_id === user.id))
       throw new ApiError(400, errorTexts.common.badRequest);
 
-    return usersProjects.map((up) => mapToCamelCase.project(up));
+    return usersProjects.map((up) => mapToCamelCase(up));
   } catch (error) {
     throw error;
   }
@@ -37,7 +37,10 @@ const create = async (
   userId,
   userName,
   userEmail,
-  accessLevel = accessLevels.view
+  canShare = false,
+  canChangePermissions = false,
+  canEdit = false,
+  canDelete = false
 ) => {
   if (!userId && !userEmail && !userName)
     throw new ApiError(400, errorTexts.common.badRequest);
@@ -55,13 +58,6 @@ const create = async (
   if (userEmail && !validateEmail(userEmail))
     throw new ApiError(400, errorTexts.users.invalidEmail);
 
-  if (
-    accessLevel !== accessLevels.view ||
-    accessLevel !== accessLevels.edit ||
-    accessLevel !== accessLevels.delete
-  )
-    throw new ApiError(400, errorTexts.access.invalidAccessLevel);
-
   try {
     const result = await db.task(async (t) => {
       const usersProjects = await t.oneOrNone(
@@ -69,8 +65,11 @@ const create = async (
         [user.id, projectId]
       );
 
-      if (!usersProjects || usersProjects.access_level === accessLevels.view)
+      if (!usersProjects || !usersProjects.can_share)
         throw new ApiError(400, errorTexts.common.badRequest);
+
+      if (!usersProjects.can_change_permissions)
+        canShare = canChangePermissions = canEdit = canDelete = false;
 
       if (!userId) {
         foundUser = await t.oneOrNone(
@@ -84,8 +83,9 @@ const create = async (
       userId = foundUser.user_id;
 
       const createdUP = await t.oneOrNone(
-        `INSERT INTO users_projects (user_id, project_id, access_level) VALUES ($1, $2, $3) RETURNING *`,
-        [userId, projectId, accessLevel]
+        `INSERT INTO users_projects (user_id, project_id, can_share, can_change_permissions, can_edit, can_delete) 
+          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [userId, projectId, canShare, canChangePermissions, canEdit, canDelete]
       );
 
       if (!createdUP)
@@ -94,28 +94,32 @@ const create = async (
       return createdUP;
     });
 
-    return mapToCamelCase.project(result);
+    return mapToCamelCase(result);
   } catch (error) {
     if (error?.code === "23505") {
       throw new ApiError(400, errorTexts.access.userHasAccess);
     }
 
-    if (error?.code === "23514") {
-      throw new ApiError(400, errorTexts.access.invalidAccessLevel);
-    }
     throw error;
   }
 };
 
-const edit = async (user, projectId, userId, accessLevel) => {
-  if (!accessLevel) throw new ApiError(400, errorTexts.common.badRequest);
-
+const edit = async (
+  user,
+  projectId,
+  userId,
+  canShare,
+  canChangePermissions,
+  canEdit,
+  canDelete
+) => {
   if (
-    accessLevel !== accessLevels.view ||
-    accessLevel !== accessLevels.edit ||
-    accessLevel !== accessLevels.delete
+    typeof canShare !== "boolean" &&
+    typeof canChangePermissions !== "boolean" &&
+    typeof canEdit !== "boolean" &&
+    typeof canDelete !== "boolean"
   )
-    throw new ApiError(400, errorTexts.access.invalidAccessLevel);
+    throw new ApiError(400, errorTexts.common.badRequest);
 
   if (!projectId || !userId)
     throw new ApiError(400, errorTexts.common.badRequest);
@@ -134,37 +138,46 @@ const edit = async (user, projectId, userId, accessLevel) => {
         [user.id, projectId]
       );
 
-      if (
-        !yoursUsersProjects ||
-        yoursUsersProjects.access_level === accessLevels.view
-      )
-        throw new ApiError(400, errorTexts.common.badRequest);
-
-      if (
-        yoursUsersProjects.access_level === accessLevels.edit &&
-        accessLevel === accessLevels.delete
-      )
+      if (!yoursUsersProjects || !yoursUsersProjects.can_change_permissions)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       if (userId === yoursUsersProjects.author_id)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      const usersProjectsToUpdate = await t.oneOrNone(
+      let usersProjectsToUpdate = await t.oneOrNone(
         `SELECT up.*, ps.author_id FROM users_projects AS up
           LEFT JOIN projects AS ps ON up.project_id=ps.project_id 
             WHERE up.user_id=$1 AND up.project_id=$2`,
         [userId, projectId]
       );
 
-      if (
-        yoursUsersProjects.access_level === accessLevels.edit &&
-        usersProjectsToUpdate.access_level === accessLevels.delete
-      )
+      if (!usersProjectsToUpdate)
         throw new ApiError(400, errorTexts.common.badRequest);
 
+      usersProjectsToUpdate = mapToCamelCase(usersProjectsToUpdate);
+
+      if (typeof canShare === "boolean")
+        usersProjectsToUpdate.canShare = canShare;
+
+      if (typeof canChangePermissions === "boolean")
+        usersProjectsToUpdate.canChangePermissions = canChangePermissions;
+
+      if (typeof canEdit === "boolean") usersProjectsToUpdate.canEdit = canEdit;
+
+      if (typeof canDelete === "boolean")
+        usersProjectsToUpdate.canDelete = canDelete;
+
       const editedUP = await t.oneOrNone(
-        `UPDATE users_projects SET access_level=$1 WHERE project_id=$2 AND user_id=$3 RETURNING *`,
-        [accessLevel, projectId, userId]
+        `UPDATE users_projects SET can_share=$1, can_change_permissions=$2, can_edit=$3, can_delete=$4 
+          WHERE project_id=$5 AND user_id=$6 RETURNING *`,
+        [
+          usersProjectsToUpdate.canShare,
+          usersProjectsToUpdate.canChangePermissions,
+          usersProjectsToUpdate.canEdit,
+          usersProjectsToUpdate.canDelete,
+          projectId,
+          userId,
+        ]
       );
 
       if (!editedUP)
@@ -173,14 +186,8 @@ const edit = async (user, projectId, userId, accessLevel) => {
       return editedUP;
     });
 
-    return mapToCamelCase.user(result);
+    return mapToCamelCase(result);
   } catch (error) {
-    if (error?.code === "23514") {
-      throw new ApiError(
-        400,
-        "invalid access level (valid are 'view', 'view, edit' or 'view, edit, delete')"
-      );
-    }
     throw error;
   }
 };
@@ -201,10 +208,7 @@ const remove = async (user, projectId, userId) => {
         [user.id, projectId]
       );
 
-      if (
-        !yoursUsersProjects ||
-        yoursUsersProjects.access_level !== accessLevels.delete
-      )
+      if (!yoursUsersProjects || !yoursUsersProjects.can_change_permissions)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       if (userId === yoursUsersProjects.author_id)
@@ -221,7 +225,7 @@ const remove = async (user, projectId, userId) => {
       return removedUP;
     });
 
-    return mapToCamelCase.user(result);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

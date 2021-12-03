@@ -12,7 +12,15 @@ const getUsersWithAccess = async (req, res, next) => {
 };
 
 const giveUserAccess = async (req, res, next) => {
-  const { userId, userName, userEmail, accessLevel } = req.body;
+  const {
+    userId,
+    userName,
+    userEmail,
+    canShare,
+    canChangePermissions,
+    canEdit,
+    canDelete,
+  } = req.body;
   const { taskId } = req.params;
 
   try {
@@ -22,7 +30,10 @@ const giveUserAccess = async (req, res, next) => {
       userId,
       userName,
       userEmail,
-      accessLevel
+      canShare,
+      canChangePermissions,
+      canEdit,
+      canDelete
     );
     res.status(201).json(result);
   } catch (error) {
@@ -32,16 +43,19 @@ const giveUserAccess = async (req, res, next) => {
 
 const editUserAccess = async (req, res, next) => {
   const { taskId, userId } = req.params;
-  const { accessLevel } = req.body;
+  const { canShare, canChangePermissions, canEdit, canDelete } = req.body;
 
   try {
     const result = await usersTasksServices.edit(
       req.user,
       taskId,
       userId,
-      accessLevel
+      canShare,
+      canChangePermissions,
+      canEdit,
+      canDelete
     );
-    res.status(204).json(result);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -52,7 +66,7 @@ const deleteUserAccess = async (req, res, next) => {
 
   try {
     const result = await usersTasksServices.remove(req.user, taskId, userId);
-    res.status(204).json(result);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
