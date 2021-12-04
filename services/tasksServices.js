@@ -6,7 +6,14 @@ const { mapToCamelCase, validateId } = require("../utils");
 const get = async (user) => {
   try {
     const tasks = await db.manyOrNone(
-      `SELECT us.name AS author_name, us.email AS autor_email, ts.*, ut.* FROM 
+      `SELECT us.name AS author_name, 
+          us.email AS autor_email, 
+          ts.*, 
+          ut.accessed_at, 
+          ut.can_share, 
+          ut.can_change_permissions, 
+          ut.can_edit, 
+          ut.can_delete FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
           LEFT JOIN users AS us ON ts.author_id=us.user_id
             WHERE ut.user_id=$1`,
@@ -26,7 +33,14 @@ const getById = async (user, taskId) => {
 
   try {
     const task = await db.oneOrNone(
-      `SELECT us.name AS author_name, us.email AS autor_email, ts.*, ut.* FROM 
+      `SELECT us.name AS author_name, 
+          us.email AS autor_email, 
+          ts.*, 
+          ut.accessed_at, 
+          ut.can_share, 
+          ut.can_change_permissions, 
+          ut.can_edit, 
+          ut.can_delete FROM 
         users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
           LEFT JOIN users AS us ON ts.author_id=us.user_id
             WHERE ts.task_id=$1 AND ut.user_id=$2`,
