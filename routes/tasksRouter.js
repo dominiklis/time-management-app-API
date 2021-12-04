@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
+// tasks
 const {
   getTasks,
   getTaskById,
@@ -9,13 +10,6 @@ const {
   deleteTask,
 } = require("../controllers/tasksController");
 
-const {
-  getUsersWithAccess,
-  giveUserAccess,
-  editUserAccess,
-  deleteUserAccess,
-} = require("../controllers/usersTasksController");
-
 router.get("/", getTasks);
 router.get("/:id", getTaskById);
 router.post("/", createTask);
@@ -23,9 +17,21 @@ router.put("/:id", editTask);
 router.delete("/:id", deleteTask);
 
 // users_tasks
+const {
+  getUsersWithAccess,
+  giveUserAccess,
+  editUserAccess,
+  deleteUserAccess,
+} = require("../controllers/usersTasksController");
+
 router.get("/:taskId/users", getUsersWithAccess);
 router.post("/:taskId/users", giveUserAccess);
 router.put("/:taskId/users/:userId", editUserAccess);
 router.delete("/:taskId/users/:userId", deleteUserAccess);
+
+// steps
+const { createStep } = require("../controllers/stepsController");
+
+router.post("/:taskId/steps", createStep);
 
 module.exports = router;

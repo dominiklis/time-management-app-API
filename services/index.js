@@ -4,6 +4,7 @@ const usersTasksServices = require("./usersTasksServices");
 const projectsServices = require("./projectsServices");
 const usersProjectsServices = require("./usersProjectsServices");
 const projectsTasksServices = require("./projectsTasksServices");
+const stepsServices = require("./stepsService");
 
 module.exports = {
   usersServices,
@@ -12,4 +13,5 @@ module.exports = {
   projectsServices,
   usersProjectsServices,
   projectsTasksServices,
+  stepsServices,
 };
