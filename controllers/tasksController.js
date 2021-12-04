@@ -21,13 +21,14 @@ const getTaskById = async (req, res, next) => {
 };
 
 const createTask = async (req, res, next) => {
-  const { name, description, dateToComplete, startTime, endTime } = req.body;
+  const { taskName, taskDescription, dateToComplete, startTime, endTime } =
+    req.body;
 
   try {
     const result = await tasksServices.create(
       req.user,
-      name,
-      description,
+      taskName,
+      taskDescription,
       dateToComplete,
       startTime,
       endTime
@@ -40,17 +41,23 @@ const createTask = async (req, res, next) => {
 };
 
 const editTask = async (req, res, next) => {
-  const { name, description, completed, dateToComplete, startTime, endTime } =
-    req.body;
+  const {
+    taskName,
+    taskDescription,
+    taskCompleted,
+    dateToComplete,
+    startTime,
+    endTime,
+  } = req.body;
   const { id } = req.params;
 
   try {
     const result = await tasksServices.edit(
       req.user,
       id,
-      name,
-      description,
-      completed,
+      taskName,
+      taskDescription,
+      taskCompleted,
       dateToComplete,
       startTime,
       endTime

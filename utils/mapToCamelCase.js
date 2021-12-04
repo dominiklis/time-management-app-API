@@ -1,8 +1,3 @@
-// const user = require("./mappingFunctions/mapUserToCamelCase");
-// const task = require("./mappingFunctions/mapTaskToCamelCase");
-// const project = require("./mappingFunctions/mapProjectToCamelCase");
-// const projectsTasks = require("./mappingFunctions/mapProjectsTasksToCameCase");
-
 const mapToCamelCase = (obj) => {
   const result = {};
   Object.keys(obj).forEach((key) => {
@@ -22,10 +17,3 @@ const mapToCamelCase = (obj) => {
 };
 
 module.exports = mapToCamelCase;
-
-// module.exports = {
-//   user,
-//   task,
-//   project,
-//   projectsTasks,
-// };

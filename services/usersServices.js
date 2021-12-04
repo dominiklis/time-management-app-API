@@ -179,7 +179,11 @@ const update = async (
     });
 
     return {
-      user: mapToCamelCase.user(result),
+      user: {
+        id: result.user_id,
+        name: result.name,
+        email: result.email,
+      },
       token: createToken(result.user_id, result.name, result.email),
     };
   } catch (error) {

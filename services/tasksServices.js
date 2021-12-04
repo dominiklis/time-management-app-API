@@ -43,22 +43,22 @@ const getById = async (user, taskId) => {
 
 const create = async (
   user,
-  name,
-  description,
+  taskName,
+  taskDescription,
   dateToComplete,
   startTime,
   endTime
 ) => {
-  if (!name || !name.trim())
+  if (!taskName || !taskName.trim())
     throw new ApiError(400, errorTexts.tasks.nameIsRequired);
-  else name = name.trim();
+  else taskName = taskName.trim();
 
   const taskToInsert = {
     author_id: user.id,
-    task_name: name,
+    task_name: taskName,
   };
 
-  if (description) taskToInsert.task_description = description.trim();
+  if (taskDescription) taskToInsert.task_description = taskDescription.trim();
 
   if (dateToComplete) taskToInsert.date_to_complete = dateToComplete;
   if (startTime) taskToInsert.start_time = startTime;
@@ -90,6 +90,8 @@ const create = async (
       return {
         ...createdTask,
         ...createdUsersTasks,
+        author_name: user.taskName,
+        author_email: user.email,
       };
     });
 
@@ -102,28 +104,28 @@ const create = async (
 const edit = async (
   user,
   taskId,
-  name,
-  description,
-  completed,
+  taskName,
+  taskDescription,
+  taskCompleted,
   dateToComplete,
   startTime,
   endTime
 ) => {
-  if (name) name = name.trim();
-  if (description) description = description.trim();
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (taskName) taskName = taskName.trim();
+  if (taskDescription) taskDescription = taskDescription.trim();
 
   if (
-    !name &&
-    !description &&
+    !taskName &&
+    !taskDescription &&
     !dateToComplete &&
     !startTime &&
     !endTime &&
-    typeof completed !== "boolean"
+    typeof taskCompleted !== "boolean"
   )
     return;
-
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
     const result = await db.task(async (t) => {
@@ -144,20 +146,20 @@ const edit = async (
 
       let additionalUpdates = "";
 
-      if (name) taskToUpdate.taskName = name;
+      taskToUpdate.taskName = taskName;
 
-      if (description) taskToUpdate.taskDescription = description;
+      taskToUpdate.taskDescription = taskDescription;
 
-      if (typeof completed === "boolean") {
-        taskToUpdate.taskCompleted = completed;
-        if (completed) additionalUpdates += ", completed_at=CURRENT_TIMESTAMP";
-        else additionalUpdates += ", completed_at=NULL";
-      }
-      if (dateToComplete) taskToUpdate.dateToComplete = dateToComplete;
+      taskToUpdate.taskCompleted = taskCompleted;
+      if (taskCompleted)
+        additionalUpdates += ", completed_at=CURRENT_TIMESTAMP";
+      else additionalUpdates += ", completed_at=NULL";
 
-      if (startTime) taskToUpdate.startTime = startTime;
+      taskToUpdate.dateToComplete = dateToComplete;
 
-      if (endTime) taskToUpdate.endTime = endTime;
+      taskToUpdate.startTime = startTime;
+
+      taskToUpdate.endTime = endTime;
 
       const updatedTask = await t.oneOrNone(
         `UPDATE tasks AS ts SET
