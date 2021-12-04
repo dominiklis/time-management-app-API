@@ -30,8 +30,9 @@ router.put("/:taskId/users/:userId", editUserAccess);
 router.delete("/:taskId/users/:userId", deleteUserAccess);
 
 // steps
-const { createStep } = require("../controllers/stepsController");
+const { getSteps, createStep } = require("../controllers/stepsController");
 
+router.get("/:taskId/steps", getSteps);
 router.post("/:taskId/steps", createStep);
 
 module.exports = router;

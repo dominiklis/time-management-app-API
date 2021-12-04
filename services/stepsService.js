@@ -3,6 +3,25 @@ const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
 
+const get = async (user, taskId) => {
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  try {
+    const result = await db.manyOrNone(
+      `
+      SELECT st.* FROM steps AS st LEFT JOIN users_tasks AS ut ON st.task_id=ut.task_id
+        WHERE st.task_id=$1 AND user_id=$2;
+    `,
+      [taskId, user.id]
+    );
+
+    return mapToCamelCase(result);
+  } catch (error) {
+    throw error;
+  }
+};
+
 const create = async (user, taskId, stepText) => {
   if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
   if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
@@ -39,5 +58,6 @@ const create = async (user, taskId, stepText) => {
 };
 
 module.exports = {
+  get,
   create,
 };
