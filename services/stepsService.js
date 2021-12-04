@@ -102,8 +102,43 @@ const edit = async (user, taskId, stepId, stepText, stepCompleted) => {
   }
 };
 
+const remove = async (user, taskId, stepId) => {
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  try {
+    const result = await db.task(async (t) => {
+      const usersTasks = await t.oneOrNone(
+        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
+        [user.id, taskId]
+      );
+
+      if (!usersTasks || !usersTasks.can_edit)
+        throw new ApiError(400, errorTexts.common.badRequest);
+
+      const removedStep = await t.oneOrNone(
+        "DELETE FROM steps WHERE step_id=$1 RETURNING *",
+        [stepId]
+      );
+
+      if (!removedStep)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+      return removedStep;
+    });
+
+    return mapToCamelCase(result);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   get,
   create,
   edit,
+  remove,
 };
