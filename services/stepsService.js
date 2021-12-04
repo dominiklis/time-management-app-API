@@ -57,7 +57,53 @@ const create = async (user, taskId, stepText) => {
   }
 };
 
+const edit = async (user, taskId, stepId, stepText, stepCompleted) => {
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (!stepText && !stepCompleted) return;
+  stepText = stepText.trim();
+  if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
+  if (typeof stepCompleted !== "boolean")
+    throw new ApiError(400, errorTexts.common.badRequest);
+
+  try {
+    const result = await db.task(async (t) => {
+      const userTask = await t.oneOrNone(
+        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
+        [user.id, taskId]
+      );
+
+      if (!userTask || !userTask.can_edit)
+        throw new ApiError(400, errorTexts.common.badRequest);
+
+      let completedAt = "";
+      if (stepCompleted) {
+        completedAt = "completed_at=CURRENT_TIMESTAMP";
+      } else completedAt = "completed_at=NULL";
+
+      const editedStep = await t.oneOrNone(
+        `UPDATE steps SET step_text=$1, step_completed=$2, ${completedAt} WHERE step_id=$3 RETURNING *`,
+        [stepText, stepCompleted, stepId]
+      );
+
+      if (!editedStep)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+      return editedStep;
+    });
+
+    return mapToCamelCase(result);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   get,
   create,
+  edit,
 };

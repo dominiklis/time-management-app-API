@@ -12,8 +12,8 @@ const getSteps = async (req, res, next) => {
 };
 
 const createStep = async (req, res, next) => {
-  const { stepText } = req.body;
   const { taskId } = req.params;
+  const { stepText } = req.body;
 
   try {
     const result = await stepsServices.create(req.user, taskId, stepText);
@@ -23,4 +23,22 @@ const createStep = async (req, res, next) => {
   }
 };
 
-module.exports = { getSteps, createStep };
+const editStep = async (req, res, next) => {
+  const { taskId, stepId } = req.params;
+  const { stepText, stepCompleted } = req.body;
+
+  try {
+    const result = await stepsServices.edit(
+      req.user,
+      taskId,
+      stepId,
+      stepText,
+      stepCompleted
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getSteps, createStep, editStep };
