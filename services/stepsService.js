@@ -16,7 +16,7 @@ const get = async (user, taskId) => {
       [taskId, user.id]
     );
 
-    return mapToCamelCase(result);
+    return result.map((step) => mapToCamelCase(step));
   } catch (error) {
     throw error;
   }
@@ -108,6 +108,8 @@ const remove = async (user, taskId, stepId) => {
 
   if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
   if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  console.log("service", taskId, stepId, user.id);
 
   try {
     const result = await db.task(async (t) => {

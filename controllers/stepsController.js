@@ -35,6 +35,7 @@ const editStep = async (req, res, next) => {
       stepText,
       stepCompleted
     );
+
     res.status(200).json(result);
   } catch (error) {
     next(error);

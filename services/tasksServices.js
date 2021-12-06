@@ -7,20 +7,28 @@ const get = async (user) => {
   try {
     const tasks = await db.manyOrNone(
       `SELECT us.name AS author_name, 
-          us.email AS autor_email, 
-          ts.*, 
-          ut.accessed_at, 
-          ut.can_share, 
-          ut.can_change_permissions, 
-          ut.can_edit, 
-          ut.can_delete FROM 
-        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id 
+      us.email AS author_email, 
+      ts.*, 
+      ut.accessed_at,
+      ut.can_share,
+      ut.can_change_permissions,
+      ut.can_edit,
+      ut.can_delete, 
+      q_steps.steps FROM 
+        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
           LEFT JOIN users AS us ON ts.author_id=us.user_id
-            WHERE ut.user_id=$1`,
+            LEFT JOIN (
+              SELECT steps.task_id, json_agg((steps.*)) AS steps FROM 
+                steps GROUP BY task_id
+            ) AS q_steps ON q_steps.task_id=ts.task_id WHERE ut.user_id=$1`,
       [user.id]
     );
 
-    const tasksToReturn = tasks.map((task) => mapToCamelCase(task));
+    const tasksToReturn = tasks.map((task) => {
+      const mappedTask = mapToCamelCase(task);
+      mappedTask.steps = task.steps?.map((step) => mapToCamelCase(step));
+      return mappedTask;
+    });
     return tasksToReturn;
   } catch (error) {
     throw error;
