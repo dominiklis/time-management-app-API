@@ -7,26 +7,39 @@ const get = async (user) => {
   try {
     const tasks = await db.manyOrNone(
       `SELECT us.name AS author_name, 
-      us.email AS author_email, 
-      ts.*, 
-      ut.accessed_at,
-      ut.can_share,
-      ut.can_change_permissions,
-      ut.can_edit,
-      ut.can_delete, 
-      q_steps.steps FROM 
-        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-          LEFT JOIN users AS us ON ts.author_id=us.user_id
+        us.email AS author_email, 
+        ts.*, 
+        ut.accessed_at,
+        ut.can_share,
+        ut.can_change_permissions,
+        ut.can_edit,
+        ut.can_delete, 
+        q_steps.steps,
+        q_users.users FROM 
+          users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
+            LEFT JOIN users AS us ON ts.author_id=us.user_id
+              LEFT JOIN (
+                SELECT steps.task_id, json_agg((steps.*)) AS steps FROM 
+                  steps GROUP BY task_id
+              ) AS q_steps ON q_steps.task_id=ts.task_id 
             LEFT JOIN (
-              SELECT steps.task_id, json_agg((steps.*)) AS steps FROM 
-                steps GROUP BY task_id
-            ) AS q_steps ON q_steps.task_id=ts.task_id WHERE ut.user_id=$1`,
+              SELECT ut.task_id, json_agg(json_build_object(
+                'user_id', ut.user_id,
+                'user_name', us.name,
+                'can_share', ut.can_share, 
+                'can_edit', ut.can_edit, 
+                'can_change_permissions', ut.can_change_permissions, 
+                'can_delete', ut.can_delete)) 
+              AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
+            ) AS q_users ON q_users.task_id=ts.task_id
+      WHERE ut.user_id=$1`,
       [user.id]
     );
 
     const tasksToReturn = tasks.map((task) => {
       const mappedTask = mapToCamelCase(task);
       mappedTask.steps = task.steps?.map((step) => mapToCamelCase(step));
+      mappedTask.users = task.users?.map((user) => mapToCamelCase(user));
       return mappedTask;
     });
     return tasksToReturn;
