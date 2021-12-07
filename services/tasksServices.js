@@ -127,6 +127,12 @@ const create = async (
         ...createdUsersTasks,
         author_name: user.taskName,
         author_email: user.email,
+        users: [
+          {
+            user_name: user.name,
+            ...createdUsersTasks,
+          },
+        ],
       };
     });
 

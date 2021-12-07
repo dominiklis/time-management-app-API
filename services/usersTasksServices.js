@@ -70,27 +70,30 @@ const create = async (
       if (!usersTasks.can_change_permissions)
         canShare = canChangePermissions = canEdit = canDelete = false;
 
-      if (!userId) {
-        foundUser = await t.oneOrNone(
-          `SELECT user_id FROM users WHERE name=$1 OR email=$2`,
-          [userName, userEmail]
-        );
+      foundUser = await t.oneOrNone(
+        `SELECT * FROM users WHERE name=$1 OR email=$2 OR user_id=$3`,
+        [userName, userEmail, userId]
+      );
 
-        if (!foundUser) throw new ApiError(400, errorTexts.common.badRequest);
-      }
-
-      userId = foundUser.user_id;
+      if (!foundUser) throw new ApiError(400, errorTexts.common.badRequest);
 
       const createdUT = await t.oneOrNone(
         `INSERT INTO users_tasks (user_id, task_id, can_share, can_change_permissions, can_edit, can_delete) 
           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [userId, taskId, canShare, canChangePermissions, canEdit, canDelete]
+        [
+          foundUser.user_id,
+          taskId,
+          canShare,
+          canChangePermissions,
+          canEdit,
+          canDelete,
+        ]
       );
 
       if (!createdUT)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      return mapToCamelCase(createdUT);
+      return { ...createdUT, userName: foundUser.name };
     });
 
     return mapToCamelCase(result);

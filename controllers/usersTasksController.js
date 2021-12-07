@@ -35,6 +35,7 @@ const giveUserAccess = async (req, res, next) => {
       canEdit,
       canDelete
     );
+
     res.status(201).json(result);
   } catch (error) {
     next(error);
