@@ -99,7 +99,7 @@ const create = async (
     return mapToCamelCase(result);
   } catch (error) {
     if (error?.code === "23505") {
-      throw new ApiError(400, errorTexts.usersTasks.userHasAccess);
+      throw new ApiError(400, errorTexts.access.userHasAccess);
     }
 
     throw error;
