@@ -19,7 +19,7 @@ const get = async (user) => {
           users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
             LEFT JOIN users AS us ON ts.author_id=us.user_id
               LEFT JOIN (
-                SELECT steps.task_id, json_agg((steps.*)) AS steps FROM 
+                SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
                   steps GROUP BY task_id
               ) AS q_steps ON q_steps.task_id=ts.task_id 
             LEFT JOIN (

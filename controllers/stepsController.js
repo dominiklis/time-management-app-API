@@ -13,10 +13,17 @@ const getSteps = async (req, res, next) => {
 
 const createStep = async (req, res, next) => {
   const { taskId } = req.params;
-  const { stepText } = req.body;
+  const { stepText, position } = req.body;
+
+  console.log({ taskId, stepText, position });
 
   try {
-    const result = await stepsServices.create(req.user, taskId, stepText);
+    const result = await stepsServices.create(
+      req.user,
+      taskId,
+      stepText,
+      position
+    );
     res.status(201).json(result);
   } catch (error) {
     next(error);
@@ -25,7 +32,9 @@ const createStep = async (req, res, next) => {
 
 const editStep = async (req, res, next) => {
   const { taskId, stepId } = req.params;
-  const { stepText, stepCompleted } = req.body;
+  const { stepText, stepCompleted, position } = req.body;
+
+  console.log({ stepText, stepCompleted, position });
 
   try {
     const result = await stepsServices.edit(
@@ -33,7 +42,8 @@ const editStep = async (req, res, next) => {
       taskId,
       stepId,
       stepText,
-      stepCompleted
+      stepCompleted,
+      position
     );
 
     res.status(200).json(result);

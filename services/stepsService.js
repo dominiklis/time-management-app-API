@@ -22,13 +22,17 @@ const get = async (user, taskId) => {
   }
 };
 
-const create = async (user, taskId, stepText) => {
+const create = async (user, taskId, stepText, position) => {
   if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
   if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
   stepText = stepText.trim();
   if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
+
+  position = parseInt(position);
+  if (typeof position !== "number" || isNaN(position))
+    throw new ApiError(400, errorTexts.common.badRequest);
 
   try {
     const result = await db.task(async (t) => {
@@ -41,8 +45,8 @@ const create = async (user, taskId, stepText) => {
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const createdStep = await t.oneOrNone(
-        "INSERT INTO steps (task_id, step_text) VALUES ($1, $2) RETURNING *",
-        [taskId, stepText]
+        "INSERT INTO steps (task_id, step_text, position) VALUES ($1, $2, $3) RETURNING *",
+        [taskId, stepText, position]
       );
 
       if (!createdStep)
@@ -57,7 +61,14 @@ const create = async (user, taskId, stepText) => {
   }
 };
 
-const edit = async (user, taskId, stepId, stepText, stepCompleted) => {
+const edit = async (
+  user,
+  taskId,
+  stepId,
+  stepText,
+  stepCompleted,
+  position
+) => {
   if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
   if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
@@ -68,6 +79,10 @@ const edit = async (user, taskId, stepId, stepText, stepCompleted) => {
   stepText = stepText.trim();
   if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
   if (typeof stepCompleted !== "boolean")
+    throw new ApiError(400, errorTexts.common.badRequest);
+
+  position = parseInt(position);
+  if (typeof position !== "number" || isNaN(position))
     throw new ApiError(400, errorTexts.common.badRequest);
 
   try {
@@ -86,8 +101,8 @@ const edit = async (user, taskId, stepId, stepText, stepCompleted) => {
       } else completedAt = "completed_at=NULL";
 
       const editedStep = await t.oneOrNone(
-        `UPDATE steps SET step_text=$1, step_completed=$2, ${completedAt} WHERE step_id=$3 RETURNING *`,
-        [stepText, stepCompleted, stepId]
+        `UPDATE steps SET step_text=$1, step_completed=$2, position=$3, ${completedAt} WHERE step_id=$4 RETURNING *`,
+        [stepText, stepCompleted, position, stepId]
       );
 
       if (!editedStep)
