@@ -5,7 +5,7 @@ const { mapToCamelCase, validateId } = require("../utils");
 
 const get = async (user) => {
   try {
-    const projects = await db.manyOrNone(
+    const result = await db.manyOrNone(
       `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
         users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
           LEFT JOIN users AS us ON ps.author_id=us.user_id
@@ -13,7 +13,7 @@ const get = async (user) => {
       [user.id]
     );
 
-    return projects.map((project) => mapToCamelCase(project));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }
@@ -24,7 +24,7 @@ const getById = async (user, projectId) => {
     throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
-    const project = await db.oneOrNone(
+    const result = await db.oneOrNone(
       `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
         users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
           LEFT JOIN users AS us ON ps.author_id=us.user_id
@@ -32,9 +32,9 @@ const getById = async (user, projectId) => {
       [user.id, projectId]
     );
 
-    if (!project) throw new ApiError(400, errorTexts.common.badRequest);
+    if (!result) throw new ApiError(400, errorTexts.common.badRequest);
 
-    return mapToCamelCase(project);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

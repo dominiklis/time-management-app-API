@@ -15,17 +15,17 @@ const getUsers = async (user, projectId) => {
     throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
-    const usersProjects = await db.manyOrNone(
+    const result = await db.manyOrNone(
       `SELECT up.project_id, us.name, us.email, us.user_id, up.* FROM users_projects AS up 
         LEFT JOIN users AS us ON up.user_id = us.user_id
           WHERE project_id=$1`,
       [projectId]
     );
 
-    if (!usersProjects.some((up) => up.user_id === user.id))
+    if (!result.some((up) => up.user_id === user.id))
       throw new ApiError(400, errorTexts.common.badRequest);
 
-    return usersProjects.map((up) => mapToCamelCase(up));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

@@ -1,7 +1,7 @@
 const { db } = require("../db");
 const ApiError = require("../errors/ApiError");
 const { mapToCamelCase, validateId } = require("../utils");
-const { accessLevels, errorTexts } = require("../utils/constants");
+const { errorTexts } = require("../utils/constants");
 
 const getTasks = async (user, projectId) => {
   if (!projectId) throw new ApiError(400, errorTexts.common.badRequest);
@@ -32,7 +32,7 @@ const getTasks = async (user, projectId) => {
       return projectsUsers;
     });
 
-    return result.map((pt) => mapToCamelCase(pt));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

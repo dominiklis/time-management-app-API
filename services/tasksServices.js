@@ -5,7 +5,7 @@ const { mapToCamelCase, validateId } = require("../utils");
 
 const get = async (user) => {
   try {
-    const tasks = await db.manyOrNone(
+    const result = await db.manyOrNone(
       `SELECT us.name AS author_name, 
         us.email AS author_email, 
         ts.*, 
@@ -36,13 +36,7 @@ const get = async (user) => {
       [user.id]
     );
 
-    const tasksToReturn = tasks.map((task) => {
-      const mappedTask = mapToCamelCase(task);
-      mappedTask.steps = task.steps?.map((step) => mapToCamelCase(step));
-      mappedTask.users = task.users?.map((user) => mapToCamelCase(user));
-      return mappedTask;
-    });
-    return tasksToReturn;
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }
@@ -53,7 +47,7 @@ const getById = async (user, taskId) => {
   if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
-    const task = await db.oneOrNone(
+    const result = await db.oneOrNone(
       `SELECT us.name AS author_name, 
           us.email AS autor_email, 
           ts.*, 
@@ -68,9 +62,9 @@ const getById = async (user, taskId) => {
       [taskId, user.id]
     );
 
-    if (!task) throw new ApiError(400, errorTexts.common.badRequest);
+    if (!result) throw new ApiError(400, errorTexts.common.badRequest);
 
-    return mapToCamelCase(task);
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

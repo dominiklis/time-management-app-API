@@ -16,7 +16,7 @@ const get = async (user, taskId) => {
       [taskId, user.id]
     );
 
-    return result.map((step) => mapToCamelCase(step));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }
@@ -121,7 +121,7 @@ const editMultiple = async (user, taskId, stepsToUpdate) => {
       return updatedSteps;
     });
 
-    return result.map((step) => mapToCamelCase(step));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

@@ -15,17 +15,17 @@ const getUsers = async (user, taskId) => {
     throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
-    const usersTasks = await db.manyOrNone(
+    const result = await db.manyOrNone(
       `SELECT ut.task_id, us.name, us.email, us.user_id, ut.* FROM users_tasks AS ut 
         LEFT JOIN users AS us ON ut.user_id = us.user_id
           WHERE task_id=$1`,
       [taskId]
     );
 
-    if (!usersTasks.some((ut) => ut.user_id === user.id))
+    if (!result.some((ut) => ut.user_id === user.id))
       throw new ApiError(400, errorTexts.common.badRequest);
 
-    return usersTasks.map((ut) => mapToCamelCase(ut));
+    return mapToCamelCase(result);
   } catch (error) {
     throw error;
   }

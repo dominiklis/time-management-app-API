@@ -4,7 +4,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { errorTexts } = require("../utils/constants");
 const {
-  mapToCamelCase,
   validateUsername,
   validateEmail,
   validatePassword,
