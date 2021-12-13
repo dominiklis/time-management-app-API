@@ -1,4 +1,4 @@
-const db = require("../db");
+const { db } = require("../db");
 const ApiError = require("../errors/ApiError");
 const { mapToCamelCase, validateId } = require("../utils");
 const { accessLevels, errorTexts } = require("../utils/constants");

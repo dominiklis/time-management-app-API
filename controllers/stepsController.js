@@ -15,8 +15,6 @@ const createStep = async (req, res, next) => {
   const { taskId } = req.params;
   const { stepText, position } = req.body;
 
-  console.log({ taskId, stepText, position });
-
   try {
     const result = await stepsServices.create(
       req.user,
@@ -30,11 +28,26 @@ const createStep = async (req, res, next) => {
   }
 };
 
+const editMultipleSteps = async (req, res, next) => {
+  const { taskId } = req.params;
+  const { stepsToUpdate } = req.body;
+
+  try {
+    const result = await stepsServices.editMultiple(
+      req.user,
+      taskId,
+      stepsToUpdate
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const editStep = async (req, res, next) => {
   const { taskId, stepId } = req.params;
   const { stepText, stepCompleted, position } = req.body;
-
-  console.log({ stepText, stepCompleted, position });
 
   try {
     const result = await stepsServices.edit(
@@ -63,4 +76,10 @@ const deleteStep = async (req, res, next) => {
   }
 };
 
-module.exports = { getSteps, createStep, editStep, deleteStep };
+module.exports = {
+  getSteps,
+  createStep,
+  editMultipleSteps,
+  editStep,
+  deleteStep,
+};

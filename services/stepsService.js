@@ -1,4 +1,4 @@
-const db = require("../db");
+const { db, helpers } = require("../db");
 const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
@@ -56,6 +56,72 @@ const create = async (user, taskId, stepText, position) => {
     });
 
     return mapToCamelCase(result);
+  } catch (error) {
+    throw error;
+  }
+};
+
+const editMultiple = async (user, taskId, stepsToUpdate) => {
+  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
+  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
+
+  if (stepsToUpdate.length === 0)
+    throw new ApiError(400, errorTexts.common.badRequest);
+
+  if (
+    stepsToUpdate.length > 1 &&
+    stepsToUpdate.filter((s) => {
+      if (!s.taskId) return true;
+      if (!validateId(s.taskId)) return true;
+      if (s.taskId !== taskId) return true;
+      if (!s.stepId) return true;
+      if (!validateId(s.stepId)) return true;
+      if (!s.stepText) return true;
+      if (typeof s.stepCompleted !== "boolean") return true;
+      s.position = parseInt(s.position);
+      if (typeof s.position !== "number" || isNaN(s.position)) return true;
+
+      return false;
+    }).length > 0
+  )
+    throw new ApiError(400, errorTexts.common.badRequest);
+
+  try {
+    const result = await db.task(async (t) => {
+      const userTask = await t.oneOrNone(
+        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
+        [user.id, taskId]
+      );
+
+      if (!userTask || !userTask.can_edit)
+        throw new ApiError(400, errorTexts.common.badRequest);
+
+      const cs = new helpers.ColumnSet(
+        [
+          { name: "step_id", prop: "stepId", cnd: true, cast: "uuid" },
+          { name: "step_text", prop: "stepText" },
+          { name: "step_completed", prop: "stepCompleted" },
+          { name: "completed_at", prop: "completedAt", cast: "timestamptz" },
+          { name: "position" },
+        ],
+        {
+          table: "steps",
+        }
+      );
+
+      let query =
+        helpers.update(stepsToUpdate, cs) +
+        " WHERE uuid(v.step_id) = t.step_id RETURNING *";
+
+      const updatedSteps = await t.manyOrNone(query);
+
+      if (updatedSteps.length === 0)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+      return updatedSteps;
+    });
+
+    return result.map((step) => mapToCamelCase(step));
   } catch (error) {
     throw error;
   }
@@ -124,8 +190,6 @@ const remove = async (user, taskId, stepId) => {
   if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
   if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
 
-  console.log("service", taskId, stepId, user.id);
-
   try {
     const result = await db.task(async (t) => {
       const usersTasks = await t.oneOrNone(
@@ -156,6 +220,7 @@ const remove = async (user, taskId, stepId) => {
 module.exports = {
   get,
   create,
+  editMultiple,
   edit,
   remove,
 };

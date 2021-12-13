@@ -33,12 +33,14 @@ router.delete("/:taskId/users/:userId", deleteUserAccess);
 const {
   getSteps,
   createStep,
+  editMultipleSteps,
   editStep,
   deleteStep,
 } = require("../controllers/stepsController");
 
 router.get("/:taskId/steps", getSteps);
 router.post("/:taskId/steps", createStep);
+router.put("/:taskId/steps/multiple", editMultipleSteps);
 router.put("/:taskId/steps/:stepId", editStep);
 router.delete("/:taskId/steps/:stepId", deleteStep);
 
