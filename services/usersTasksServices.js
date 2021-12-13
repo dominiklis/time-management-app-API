@@ -75,7 +75,7 @@ const create = async (
         [userName, userEmail, userId]
       );
 
-      if (!foundUser) throw new ApiError(400, errorTexts.common.badRequest);
+      if (!foundUser) throw new ApiError(400, errorTexts.common.userNotFound);
 
       const createdUT = await t.oneOrNone(
         `INSERT INTO users_tasks (user_id, task_id, can_share, can_change_permissions, can_edit, can_delete) 

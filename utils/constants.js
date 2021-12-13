@@ -9,6 +9,7 @@ const errorTexts = {
     badRequest: "bad request",
     somethingWentWrong: "something went wrong",
     invalidId: "invalid id",
+    userNotFound: "user not found",
   },
 
   users: {
