@@ -17,11 +17,13 @@ const createFilters = (params) => {
       dateToCompleteFilter = `(ts.date_to_complete < '${params.end}')`;
     }
 
-    filters = ` AND (${params.withoutDate ? params.withoutDate : ""} ${
-      params.withoutDate && dateToCompleteFilter
-        ? `OR ${dateToCompleteFilter})`
-        : ")"
-    }`;
+    if (params.withoutDate && dateToCompleteFilter) {
+      filters = ` AND (${params.withoutDate} OR (${dateToCompleteFilter}))`;
+    } else if (params.withoutDate) {
+      filters = ` AND (${params.withoutDate})`;
+    } else if (dateToCompleteFilter) {
+      filters = ` AND (${dateToCompleteFilter})`;
+    }
   }
 
   return filters;
