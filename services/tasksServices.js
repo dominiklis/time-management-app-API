@@ -3,7 +3,31 @@ const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
 
-const get = async (user) => {
+const createFilters = (params) => {
+  let filters = "";
+  if (params.withoutDate || params.start || params.end) {
+    if (params.withoutDate) params.withoutDate = "ts.date_to_complete IS NULL";
+
+    let dateToCompleteFilter = "";
+    if (params.start && params.end) {
+      dateToCompleteFilter = `(ts.date_to_complete >= '${params.start}' AND ts.date_to_complete < '${params.end}')`;
+    } else if (params.start) {
+      dateToCompleteFilter = `(ts.date_to_complete >= '${params.start}')`;
+    } else if (params.end) {
+      dateToCompleteFilter = `(ts.date_to_complete < '${params.end}')`;
+    }
+
+    filters = ` AND (${params.withoutDate ? params.withoutDate : ""} ${
+      params.withoutDate && dateToCompleteFilter
+        ? `OR ${dateToCompleteFilter})`
+        : ")"
+    }`;
+  }
+
+  return filters;
+};
+
+const get = async (user, params) => {
   try {
     const result = await db.manyOrNone(
       `SELECT us.name AS author_name, 
@@ -32,7 +56,9 @@ const get = async (user) => {
                 'can_delete', ut.can_delete)) 
               AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
             ) AS q_users ON q_users.task_id=ts.task_id
-      WHERE ut.user_id=$1`,
+          WHERE ut.user_id=$1${createFilters(
+            params
+          )} ORDER BY ts.date_to_complete, ts.start_time`,
       [user.id]
     );
 

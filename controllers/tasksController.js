@@ -1,8 +1,14 @@
 const { tasksServices } = require("../services");
 
 const getTasks = async (req, res, next) => {
+  const { start, end, withoutDate } = req.query;
+
   try {
-    const result = await tasksServices.get(req.user);
+    const result = await tasksServices.get(req.user, {
+      start,
+      end,
+      withoutDate,
+    });
     res.status(200).json(result);
   } catch (error) {
     next(error);
