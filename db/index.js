@@ -1,6 +1,15 @@
-const pgp = require("pg-promise")();
+const pgPromise = require("pg-promise");
+const { Users } = require("./repos");
 
-const cn = {
+const initOptions = {
+  extend(obj, dc) {
+    obj.users = new Users(obj, pgp);
+  },
+};
+
+const pgp = pgPromise(initOptions);
+
+const config = {
   host: process.env.PGHOST,
   user: process.env.PGUSER,
   database: process.env.PGDATABASE,
@@ -8,7 +17,7 @@ const cn = {
   port: process.env.PGPORT,
 };
 
-const db = pgp(cn);
+const db = pgp(config);
 
 module.exports = {
   db,

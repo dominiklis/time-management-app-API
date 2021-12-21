@@ -34,10 +34,7 @@ const register = async (name, email, password) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = await db.oneOrNone(
-      `INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *`,
-      [name, email, hashedPassword]
-    );
+    const newUser = await db.users.add(name, email, hashedPassword);
 
     if (!newUser) throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
@@ -70,11 +67,7 @@ const login = async (name, email, password) => {
   if (!isPasswordValid) throw new ApiError(400, errorTexts.users.invalidFields);
 
   try {
-    const user = await db.oneOrNone(
-      `SELECT * FROM users WHERE name=$1 OR email=$2`,
-      [name, email]
-    );
-
+    const user = await db.users.getByNameOrEmail(name, email);
     if (!user) throw new ApiError(400, errorTexts.users.invalidFields);
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -125,9 +118,8 @@ const update = async (
 
   try {
     const result = await db.task(async (t) => {
-      const userToUpdate = await t.one(`SELECT * FROM users WHERE user_id=$1`, [
-        user.id,
-      ]);
+      const userToUpdate = await db.users.getById(user.id);
+      if (!userToUpdate) throw new ApiError(400, errorTexts.badRequest);
 
       const isPasswordValid = await bcrypt.compare(
         currentPassword,
@@ -195,12 +187,8 @@ const update = async (
 
 const renew = async (user) => {
   try {
-    const userFromDb = await db.oneOrNone(
-      "SELECT * FROM users WHERE user_id=$1",
-      [user.id]
-    );
-
-    if (!userFromDb) throw new ApiError(400, errorTexts.user.badRequest);
+    const userFromDb = await db.users.getById(user.id);
+    if (!userFromDb) throw new ApiError(400, errorTexts.badRequest);
 
     if (user.name !== userFromDb.name || user.email !== userFromDb.email)
       throw new ApiError(400, errorTexts.user.badRequest);
