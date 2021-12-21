@@ -9,7 +9,7 @@ const cors = require("cors");
 
 const routes = require("./routes");
 
-const handleErrors = require("./middleware/handleErrors");
+const { handleErrors } = require("./middleware");
 
 // middleware
 app.use(express.json());

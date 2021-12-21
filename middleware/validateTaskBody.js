@@ -1,6 +1,5 @@
 const ApiError = require("../errors/ApiError");
-const validateDateString = require("../utils/validating/validateDateString");
-const validateId = require("../utils/validating/validateId");
+const { validateId, validateDateString } = require("../utils");
 
 const validateTaskBody = (req, res, next) => {
   let {

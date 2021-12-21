@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/authMidlleware");
+const { auth, validateUserRequestBody } = require("../middleware");
 const {
   register,
   login,
@@ -8,8 +8,11 @@ const {
   renew,
 } = require("../controllers/usersController");
 
-router.post("/register", register);
-router.post("/login", login);
+const validateRegisterBody = validateUserRequestBody();
+const validateLoginBody = validateUserRequestBody(true);
+
+router.post("/register", validateRegisterBody, register);
+router.post("/login", validateLoginBody, login);
 router.put("/", auth, update);
 router.get("/renew", auth, renew);
 

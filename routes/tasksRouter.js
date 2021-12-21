@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const validateTaskBody = require("../middleware/validateTaskBody");
-const validateTaskParams = require("../middleware/validateTaskParams");
+const { validateTaskBody, validateTaskParams } = require("../middleware");
 
 // tasks
 const {

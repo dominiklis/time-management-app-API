@@ -15,21 +15,6 @@ const createToken = (id, name, email) =>
   });
 
 const register = async (name, email, password) => {
-  if (!name || !email || !password)
-    throw new ApiError(400, errorTexts.users.requiredRegisterFields);
-
-  name = name.trim();
-  const isUsernameValid = validateUsername(name);
-  if (!isUsernameValid) throw new ApiError(400, errorTexts.users.invalidName);
-
-  email = email.trim();
-  const isEmailValid = validateEmail(email);
-  if (!isEmailValid) throw new ApiError(400, errorTexts.users.invalidEmail);
-
-  const isPasswordValid = validatePassword(password);
-  if (!isPasswordValid)
-    throw new ApiError(400, errorTexts.users.invalidPassword);
-
   try {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -55,17 +40,6 @@ const register = async (name, email, password) => {
 };
 
 const login = async (name, email, password) => {
-  if ((!name && !email) || !password)
-    throw new ApiError(400, errorTexts.users.requiredLoginFields);
-
-  const isUsernameValid = validateUsername(name);
-  const isEmailValid = validateEmail(email);
-  if (!isUsernameValid && !isEmailValid)
-    throw new ApiError(400, errorTexts.users.invalidFields);
-
-  const isPasswordValid = validatePassword(password);
-  if (!isPasswordValid) throw new ApiError(400, errorTexts.users.invalidFields);
-
   try {
     const user = await db.users.getByNameOrEmail(name, email);
     if (!user) throw new ApiError(400, errorTexts.users.invalidFields);
