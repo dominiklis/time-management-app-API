@@ -16,10 +16,10 @@ const getTasks = async (req, res, next) => {
 };
 
 const getTaskById = async (req, res, next) => {
-  const { id } = req.params;
+  const { taskId } = req.params;
 
   try {
-    const result = await tasksServices.getById(req.user, id);
+    const result = await tasksServices.getById(req.user, taskId);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -27,17 +27,26 @@ const getTaskById = async (req, res, next) => {
 };
 
 const createTask = async (req, res, next) => {
-  const { taskName, taskDescription, dateToComplete, startTime, endTime } =
-    req.body;
+  const {
+    taskName,
+    taskDescription,
+    taskCompleted,
+    dateToComplete,
+    startTime,
+    endTime,
+    projectId,
+  } = req.body;
 
   try {
     const result = await tasksServices.create(
       req.user,
       taskName,
       taskDescription,
+      taskCompleted,
       dateToComplete,
       startTime,
-      endTime
+      endTime,
+      projectId
     );
 
     res.status(201).json(result);
@@ -54,19 +63,21 @@ const editTask = async (req, res, next) => {
     dateToComplete,
     startTime,
     endTime,
+    projectId,
   } = req.body;
-  const { id } = req.params;
+  const { taskId } = req.params;
 
   try {
     const result = await tasksServices.edit(
       req.user,
-      id,
+      taskId,
       taskName,
       taskDescription,
       taskCompleted,
       dateToComplete,
       startTime,
-      endTime
+      endTime,
+      projectId
     );
 
     res.status(200).json(result);
@@ -76,10 +87,10 @@ const editTask = async (req, res, next) => {
 };
 
 const deleteTask = async (req, res, next) => {
-  const { id } = req.params;
+  const { taskId } = req.params;
 
   try {
-    const result = await tasksServices.remove(req.user, id);
+    const result = await tasksServices.remove(req.user, taskId);
 
     res.status(200).json(result);
   } catch (error) {

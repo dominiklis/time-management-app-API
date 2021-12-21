@@ -35,6 +35,7 @@ const get = async (user, params) => {
       `SELECT us.name AS author_name, 
         us.email AS author_email, 
         ts.*, 
+        pj.project_name,
         ut.accessed_at,
         ut.can_share,
         ut.can_change_permissions,
@@ -44,10 +45,10 @@ const get = async (user, params) => {
         q_users.users FROM 
           users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
             LEFT JOIN users AS us ON ts.author_id=us.user_id
-              LEFT JOIN (
-                SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
-                  steps GROUP BY task_id
-              ) AS q_steps ON q_steps.task_id=ts.task_id 
+            LEFT JOIN (
+              SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
+                steps GROUP BY task_id
+            ) AS q_steps ON q_steps.task_id=ts.task_id 
             LEFT JOIN (
               SELECT ut.task_id, json_agg(json_build_object(
                 'user_id', ut.user_id,
@@ -58,6 +59,7 @@ const get = async (user, params) => {
                 'can_delete', ut.can_delete)) 
               AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
             ) AS q_users ON q_users.task_id=ts.task_id
+            LEFT JOIN projects AS pj ON ts.project_id=pj.project_id
           WHERE ut.user_id=$1${createFilters(
             params
           )} ORDER BY ts.date_to_complete, ts.start_time`,
@@ -102,24 +104,22 @@ const create = async (
   user,
   taskName,
   taskDescription,
+  taskCompleted,
   dateToComplete,
   startTime,
-  endTime
+  endTime,
+  projectId
 ) => {
-  if (!taskName || !taskName.trim())
-    throw new ApiError(400, errorTexts.tasks.nameIsRequired);
-  else taskName = taskName.trim();
-
   const taskToInsert = {
     author_id: user.id,
     task_name: taskName,
+    task_description: taskDescription,
+    task_completed: taskCompleted,
+    date_to_complete: dateToComplete,
+    start_time: startTime,
+    end_time: endTime,
+    project_id: projectId,
   };
-
-  if (taskDescription) taskToInsert.task_description = taskDescription.trim();
-
-  if (dateToComplete) taskToInsert.date_to_complete = dateToComplete;
-  if (startTime) taskToInsert.start_time = startTime;
-  if (endTime) taskToInsert.end_time = endTime;
 
   try {
     const result = await db.task(async (t) => {
@@ -160,6 +160,10 @@ const create = async (
 
     return mapToCamelCase(result);
   } catch (error) {
+    if (error?.code === "23503") {
+      throw new ApiError(400, errorTexts.common.badRequest);
+    }
+
     throw error;
   }
 };
@@ -172,57 +176,28 @@ const edit = async (
   taskCompleted,
   dateToComplete,
   startTime,
-  endTime
+  endTime,
+  projectId
 ) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (taskName) taskName = taskName.trim();
-  if (taskDescription) taskDescription = taskDescription.trim();
-
-  if (
-    !taskName &&
-    !taskDescription &&
-    !dateToComplete &&
-    !startTime &&
-    !endTime &&
-    typeof taskCompleted !== "boolean"
-  )
-    return;
-
   try {
     const result = await db.task(async (t) => {
-      let taskToUpdate = await t.oneOrNone(
-        `SELECT us.name AS author_name, us.email AS author_email, ts.*, ut.* FROM 
-          users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-            LEFT JOIN users AS us ON ts.author_id=us.user_id
-              WHERE ts.task_id=$1 AND ut.user_id=$2`,
-        [taskId, user.id]
+      let usersTasks = await t.oneOrNone(
+        `SELECT ut.*, ts.task_completed FROM users_tasks AS ut 
+          LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
+          WHERE user_id=$1 AND ut.task_id=$2`,
+        [user.id, taskId]
       );
 
-      if (!taskToUpdate) throw new ApiError(400, errorTexts.common.badRequest);
+      if (!usersTasks) throw new ApiError(400, errorTexts.common.badRequest);
 
-      taskToUpdate = mapToCamelCase(taskToUpdate);
-
-      if (!taskToUpdate.canEdit)
+      if (!usersTasks.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      let additionalUpdates = "";
-
-      taskToUpdate.taskName = taskName;
-
-      taskToUpdate.taskDescription = taskDescription;
-
-      taskToUpdate.taskCompleted = taskCompleted;
-      if (taskCompleted)
-        additionalUpdates += ", completed_at=CURRENT_TIMESTAMP";
-      else additionalUpdates += ", completed_at=NULL";
-
-      taskToUpdate.dateToComplete = dateToComplete;
-
-      taskToUpdate.startTime = startTime;
-
-      taskToUpdate.endTime = endTime;
+      let completedAt = "";
+      if (usersTasks.task_completed !== taskCompleted) {
+        if (taskCompleted) completedAt = ", completed_at=CURRENT_TIMESTAMP";
+        else completedAt = ", completed_at=NULL";
+      }
 
       const updatedTask = await t.oneOrNone(
         `UPDATE tasks AS ts SET
@@ -231,8 +206,9 @@ const edit = async (
           task_completed=$5,
           date_to_complete=$6,
           start_time=$7,
-          end_time=$8
-          ${additionalUpdates}
+          end_time=$8,
+          project_id=$9
+          ${completedAt}
             FROM users_tasks AS ut
               WHERE ts.task_id = ut.task_id
                 AND ut.user_id=$1
@@ -241,12 +217,13 @@ const edit = async (
         [
           user.id,
           taskId,
-          taskToUpdate.taskName,
-          taskToUpdate.taskDescription,
-          taskToUpdate.taskCompleted,
-          taskToUpdate.dateToComplete,
-          taskToUpdate.startTime,
-          taskToUpdate.endTime,
+          taskName,
+          taskDescription,
+          taskCompleted,
+          dateToComplete,
+          startTime,
+          endTime,
+          projectId,
         ]
       );
 
@@ -258,14 +235,15 @@ const edit = async (
 
     return mapToCamelCase(result);
   } catch (error) {
+    if (error?.code === "23503") {
+      throw new ApiError(400, errorTexts.common.badRequest);
+    }
+
     throw error;
   }
 };
 
 const remove = async (user, taskId) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
     const result = await db.task(async (t) => {
       const usersTasks = await t.oneOrNone(

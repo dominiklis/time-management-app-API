@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const validateTaskBody = require("../middleware/validateTaskBody");
+const validateTaskParams = require("../middleware/validateTaskParams");
 
 // tasks
 const {
@@ -11,10 +13,10 @@ const {
 } = require("../controllers/tasksController");
 
 router.get("/", getTasks);
-router.get("/:id", getTaskById);
-router.post("/", createTask);
-router.put("/:id", editTask);
-router.delete("/:id", deleteTask);
+router.get("/:taskId", getTaskById);
+router.post("/", validateTaskBody, createTask);
+router.put("/:taskId", validateTaskParams, validateTaskBody, editTask);
+router.delete("/:taskId", validateTaskParams, deleteTask);
 
 // users_tasks
 const {
