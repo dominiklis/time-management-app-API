@@ -1,17 +1,11 @@
 const { db } = require("../db");
 const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
-const { mapToCamelCase, validateId } = require("../utils");
+const { mapToCamelCase } = require("../utils");
 
 const get = async (user) => {
   try {
-    const result = await db.manyOrNone(
-      `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
-        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
-          LEFT JOIN users AS us ON ps.author_id=us.user_id
-            WHERE up.user_id=$1`,
-      [user.id]
-    );
+    const result = await db.projects.listForUser(user.id);
 
     return mapToCamelCase(result);
   } catch (error) {
@@ -20,17 +14,8 @@ const get = async (user) => {
 };
 
 const getById = async (user, projectId) => {
-  if (!projectId || !validateId(projectId))
-    throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
-    const result = await db.oneOrNone(
-      `SELECT us.name AS author_name, us.email AS author_email, ps.*, up.* FROM 
-        users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
-          LEFT JOIN users AS us ON ps.author_id=us.user_id
-            WHERE up.user_id=$1 AND ps.project_id=$2`,
-      [user.id, projectId]
-    );
+    const result = await db.projects.getSingleById(user.id, projectId);
 
     if (!result) throw new ApiError(400, errorTexts.common.badRequest);
 
@@ -40,23 +25,13 @@ const getById = async (user, projectId) => {
   }
 };
 
-const create = async (user, name, description) => {
-  if (!name || !name.trim())
-    throw new ApiError(400, errorTexts.projects.nameIsRequired);
-  else name = name.trim();
-
-  const projectToInsert = {
-    author_id: user.id,
-    project_name: name,
-  };
-
-  if (description) projectToInsert.project_description = description.trim();
-
+const create = async (user, projectName, projectDescription) => {
   try {
     const result = await db.task(async (t) => {
-      const createdProject = await t.oneOrNone(
-        "INSERT INTO projects (${this:name}) VALUES(${this:csv}) RETURNING *",
-        projectToInsert
+      const createdProject = await t.projects.add(
+        user.id,
+        projectName,
+        projectDescription
       );
 
       if (!createdProject)
@@ -75,10 +50,12 @@ const create = async (user, name, description) => {
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
       }
 
-      return {
-        ...createdProject,
-        ...createdUsersProjects,
-      };
+      const projectToRetun = await t.projects.getSingleById(
+        user.id,
+        createdProject.project_id
+      );
+
+      return projectToRetun;
     });
 
     return mapToCamelCase(result);
@@ -87,57 +64,30 @@ const create = async (user, name, description) => {
   }
 };
 
-const edit = async (user, projectId, name, description) => {
-  if (name) name = name.trim();
-  if (description) description = description.trim();
-
-  if (!projectId || !validateId(projectId))
-    throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (!name && !description) return;
-
+const edit = async (user, projectId, projectName, projectDescription) => {
   try {
     const result = await db.task(async (t) => {
-      let projectToUpdate = await t.oneOrNone(
+      const usersProjects = await t.oneOrNone(
         `SELECT us.name, us.email, ps.*, up.* FROM 
           users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
             LEFT JOIN users AS us ON ps.author_id=us.user_id
               WHERE up.user_id=$1 AND ps.project_id=$2;`,
         [user.id, projectId]
       );
-
-      if (!projectToUpdate)
+      if (!usersProjects || !usersProjects.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      projectToUpdate = mapToCamelCase(projectToUpdate);
-
-      if (!projectToUpdate.canEdit)
-        throw new ApiError(400, errorTexts.common.badRequest);
-
-      if (name) projectToUpdate.projectName = name;
-      if (description) projectToUpdate.projectDescription = description;
-
-      const updatedProject = await t.oneOrNone(
-        `UPDATE projects AS ps SET
-          project_name=$3,
-          project_description=$4
-            FROM users_projects AS up
-              WHERE ps.project_id = up.project_id
-                AND up.user_id=$1
-                AND up.can_edit=true
-                AND ps.project_id=$2 RETURNING *`,
-        [
-          user.id,
-          projectId,
-          projectToUpdate.projectName,
-          projectToUpdate.projectDescription,
-        ]
+      const updatedProject = await t.projects.edit(
+        projectId,
+        projectName,
+        projectDescription
       );
-
       if (!updatedProject)
-        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+        throw new ApiError(400, errorTexts.common.badRequest);
 
-      return updatedProject;
+      const projectToRetun = await t.projects.getSingleById(user.id, projectId);
+
+      return projectToRetun;
     });
 
     return mapToCamelCase(result);
@@ -147,9 +97,6 @@ const edit = async (user, projectId, name, description) => {
 };
 
 const remove = async (user, projectId) => {
-  if (!projectId || !validateId(projectId))
-    throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
     const result = await db.task(async (t) => {
       const usersProjects = await t.oneOrNone(
@@ -160,10 +107,7 @@ const remove = async (user, projectId) => {
       if (!usersProjects || !usersProjects.can_delete)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      const removedProject = await t.oneOrNone(
-        "DELETE FROM projects WHERE project_id=$1 RETURNING *",
-        [projectId]
-      );
+      const removedProject = await t.projects.delete(projectId);
 
       if (!removedProject)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);

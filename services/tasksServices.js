@@ -100,8 +100,6 @@ const create = async (
         createdTask.task_id,
         user.id
       );
-      if (!createdTaskToReturn)
-        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
       return createdTaskToReturn;
     });

@@ -4,44 +4,6 @@ class TasksRepository {
     this.pgp = pgp;
   }
 
-  async add(
-    userId,
-    taskName,
-    taskDescription,
-    taskCompleted,
-    completedAt,
-    dateToComplete,
-    startTime,
-    endTime,
-    projectId
-  ) {
-    return this.db.oneOrNone(
-      `
-      INSERT INTO tasks (
-        author_id, 
-        task_name, 
-        task_description, 
-        task_completed, 
-        completed_at,
-        date_to_complete, 
-        start_time, 
-        end_time, 
-        project_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [
-        userId,
-        taskName,
-        taskDescription,
-        taskCompleted,
-        completedAt,
-        dateToComplete,
-        startTime,
-        endTime,
-        projectId,
-      ]
-    );
-  }
-
   async listForUser(userId) {
     return this.db.manyOrNone(
       `
@@ -116,10 +78,42 @@ class TasksRepository {
     );
   }
 
-  async delete(taskId) {
-    return this.db.oneOrNone("DELETE FROM tasks WHERE task_id=$1 RETURNING *", [
-      taskId,
-    ]);
+  async add(
+    userId,
+    taskName,
+    taskDescription,
+    taskCompleted,
+    completedAt,
+    dateToComplete,
+    startTime,
+    endTime,
+    projectId
+  ) {
+    return this.db.oneOrNone(
+      `
+      INSERT INTO tasks (
+        author_id, 
+        task_name, 
+        task_description, 
+        task_completed, 
+        completed_at,
+        date_to_complete, 
+        start_time, 
+        end_time, 
+        project_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        userId,
+        taskName,
+        taskDescription,
+        taskCompleted,
+        completedAt,
+        dateToComplete,
+        startTime,
+        endTime,
+        projectId,
+      ]
+    );
   }
 
   async edit(
@@ -162,6 +156,12 @@ class TasksRepository {
         completedAt,
       ]
     );
+  }
+
+  async delete(taskId) {
+    return this.db.oneOrNone("DELETE FROM tasks WHERE task_id=$1 RETURNING *", [
+      taskId,
+    ]);
   }
 }
 

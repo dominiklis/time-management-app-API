@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-
 const {
   getProjects,
   getProjectById,
@@ -10,23 +9,31 @@ const {
 } = require("../controllers/projectsController");
 
 const {
+  getAssignedTasks,
+  assignTask,
+  removeAssignedTasks,
+} = require("../controllers/projectsTasksController");
+
+const {
   getUsersWithAccess,
   giveUserAccess,
   editUsersAccess,
   removeUsersAccess,
 } = require("../controllers/usersProjectsController");
 
-const {
-  getAssignedTasks,
-  assignTask,
-  removeAssignedTasks,
-} = require("../controllers/projectsTasksController");
+const { validateIdInParams, validateProjectBody } = require("../middleware");
+const validateProjectParams = validateIdInParams("projectId");
 
 router.get("/", getProjects);
-router.get("/:id", getProjectById);
-router.post("/", createProject);
-router.put("/:id", editProject);
-router.delete("/:id", deleteProject);
+router.get("/:projectId", validateProjectParams, getProjectById);
+router.post("/", validateProjectBody, createProject);
+router.put(
+  "/:projectId",
+  validateProjectParams,
+  validateProjectBody,
+  editProject
+);
+router.delete("/:projectId", validateProjectParams, deleteProject);
 
 // users_projects
 router.get("/:projectId/users", getUsersWithAccess);
