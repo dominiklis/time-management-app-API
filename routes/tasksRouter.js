@@ -1,6 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { validateTaskBody, validateTaskParams } = require("../middleware");
+const {
+  validateTaskBody,
+  validateTaskParams,
+  validateUserParams,
+  validateUsersTasksBody,
+} = require("../middleware");
 
 // tasks
 const {
@@ -25,10 +30,29 @@ const {
   deleteUserAccess,
 } = require("../controllers/usersTasksController");
 
-router.get("/:taskId/users", getUsersWithAccess);
-router.post("/:taskId/users", giveUserAccess);
-router.put("/:taskId/users/:userId", editUserAccess);
-router.delete("/:taskId/users/:userId", deleteUserAccess);
+const validatePostUsersTasksBody = validateUsersTasksBody(true, false);
+const validatePutUsersTasksBody = validateUsersTasksBody(false, true);
+
+router.get("/:taskId/users", validateTaskParams, getUsersWithAccess);
+
+router.post(
+  "/:taskId/users",
+  validateTaskParams,
+  validatePostUsersTasksBody,
+  giveUserAccess
+);
+router.put(
+  "/:taskId/users/:userId",
+  validateTaskParams,
+  validatePutUsersTasksBody,
+  editUserAccess
+);
+router.delete(
+  "/:taskId/users/:userId",
+  validateTaskParams,
+  validateUserParams,
+  deleteUserAccess
+);
 
 // steps
 const {

@@ -11,6 +11,13 @@ class UsersRepository {
     );
   }
 
+  async getSingle(name, email, userId) {
+    return this.db.oneOrNone(
+      `SELECT * FROM users WHERE name=$1 OR email=$2 OR user_id=$3`,
+      [name, email, userId]
+    );
+  }
+
   async getByNameOrEmail(name, email) {
     return this.db.oneOrNone("SELECT * FROM users WHERE name=$1 OR email=$2", [
       name,

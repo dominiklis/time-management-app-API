@@ -26,6 +26,37 @@ class UsersTasksRepository {
       [userId, taskId]
     );
   }
+
+  async listForTask(taskId) {
+    return this.db.manyOrNone(
+      `SELECT ut.task_id, us.name, us.email, us.user_id, ut.* FROM users_tasks AS ut 
+        LEFT JOIN users AS us ON ut.user_id = us.user_id
+          WHERE task_id=$1`,
+      [taskId]
+    );
+  }
+
+  async edit(
+    userId,
+    taskId,
+    canShare,
+    canChangePermissions,
+    canEdit,
+    canDelete
+  ) {
+    return this.db.oneOrNone(
+      `UPDATE users_tasks SET can_share=$1, can_change_permissions=$2, can_edit=$3, can_delete=$4 
+          WHERE task_id=$5 AND user_id=$6 RETURNING *`,
+      [canShare, canChangePermissions, canEdit, canDelete, taskId, userId]
+    );
+  }
+
+  async delete(taskId, userId) {
+    return this.db.oneOrNone(
+      `DELETE FROM users_tasks WHERE task_id=$1 AND user_id=$2 RETURNING *`,
+      [taskId, userId]
+    );
+  }
 }
 
 module.exports = UsersTasksRepository;
