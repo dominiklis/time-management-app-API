@@ -37,16 +37,16 @@ const create = async (user, projectName, projectDescription) => {
       if (!createdProject)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      const createdUsersProjects = await t.oneOrNone(
-        `INSERT INTO users_projects (user_id, project_id, can_share, can_change_permissions, can_edit, can_delete) 
-          VALUES ($1, $2, $3, $3, $3, $3) RETURNING *`,
-        [user.id, createdProject.project_id, true]
+      const createdUsersProjects = await t.usersProjects.add(
+        user.id,
+        createdProject.project_id,
+        true,
+        true,
+        true,
+        true
       );
-
       if (!createdUsersProjects) {
-        await t.none("DELETE FROM projects WHERE project_id=$1", [
-          createdProject.project_id,
-        ]);
+        await t.projects.delete(createdProject.project_id);
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
       }
 
@@ -67,13 +67,7 @@ const create = async (user, projectName, projectDescription) => {
 const edit = async (user, projectId, projectName, projectDescription) => {
   try {
     const result = await db.task(async (t) => {
-      const usersProjects = await t.oneOrNone(
-        `SELECT us.name, us.email, ps.*, up.* FROM 
-          users_projects AS up LEFT JOIN projects AS ps ON up.project_id = ps.project_id
-            LEFT JOIN users AS us ON ps.author_id=us.user_id
-              WHERE up.user_id=$1 AND ps.project_id=$2;`,
-        [user.id, projectId]
-      );
+      const usersProjects = await t.usersProjects.getSingle(user.id, projectId);
       if (!usersProjects || !usersProjects.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
@@ -99,10 +93,7 @@ const edit = async (user, projectId, projectName, projectDescription) => {
 const remove = async (user, projectId) => {
   try {
     const result = await db.task(async (t) => {
-      const usersProjects = await t.oneOrNone(
-        `SELECT * FROM users_projects WHERE user_id=$1 AND project_id=$2`,
-        [user.id, projectId]
-      );
+      const usersProjects = await t.usersProjects.getSingle(user.id, projectId);
 
       if (!usersProjects || !usersProjects.can_delete)
         throw new ApiError(400, errorTexts.common.badRequest);

@@ -30,7 +30,6 @@ const giveUserAccess = async (req, res, next) => {
       userId,
       userName,
       userEmail,
-
       canShare,
       canChangePermissions,
       canEdit,

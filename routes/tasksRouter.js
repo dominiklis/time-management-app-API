@@ -26,14 +26,14 @@ const {
 
 const {
   validateTaskBody,
-  validateUsersTasksBody,
+  validateSharingRouteBody,
   validateIdInParams,
 } = require("../middleware");
 
 const validateTaskParams = validateIdInParams("taskId");
 const validateUserParams = validateIdInParams("userId");
-const validatePostUsersTasksBody = validateUsersTasksBody(true, false);
-const validatePutUsersTasksBody = validateUsersTasksBody(false, true);
+const validatePostUsersTasksBody = validateSharingRouteBody(true, false);
+const validatePutUsersTasksBody = validateSharingRouteBody(false, true);
 
 // tasks
 router.get("/", getTasks);

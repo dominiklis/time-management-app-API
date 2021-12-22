@@ -80,7 +80,11 @@ const edit = async (
       if (!usersTasks || !usersTasks.can_change_permissions)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      if (userId === usersTasks.author_id)
+      const authorId = await t.oneOrNone(
+        "SELECT author_id FROM tasks WHERE task_id=$1",
+        [taskId]
+      );
+      if (userId === authorId.author_id)
         throw new ApiError(400, errorTexts.common.badRequest);
 
       const editedUT = await t.usersTasks.edit(

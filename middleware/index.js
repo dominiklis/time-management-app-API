@@ -3,7 +3,7 @@ const handleErrors = require("./handleErrors");
 const validateIdInParams = require("./validateIdInParams");
 const validateTaskBody = require("./validateTaskBody");
 const validateUserRequestBody = require("./validateUserRequestBody");
-const validateUsersTasksBody = require("./validateUsersTasksBody");
+const validateSharingRouteBody = require("./validateSharingRouteBody");
 const validateProjectBody = require("./validateProjectBody");
 
 module.exports = {
@@ -12,6 +12,6 @@ module.exports = {
   validateIdInParams,
   validateTaskBody,
   validateUserRequestBody,
-  validateUsersTasksBody,
+  validateSharingRouteBody,
   validateProjectBody,
 };

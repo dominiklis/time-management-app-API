@@ -21,25 +21,49 @@ const {
   removeUsersAccess,
 } = require("../controllers/usersProjectsController");
 
-const { validateIdInParams, validateProjectBody } = require("../middleware");
-const validateProjectParams = validateIdInParams("projectId");
+const {
+  validateIdInParams,
+  validateProjectBody,
+  validateSharingRouteBody,
+} = require("../middleware");
+
+const validateProjectIdInParams = validateIdInParams("projectId");
+const validateUserIdInParams = validateIdInParams("userId");
+const validatePostUsersProjectBody = validateSharingRouteBody(true, false);
+const validatePutUsersProjectBody = validateSharingRouteBody(false, true);
 
 router.get("/", getProjects);
-router.get("/:projectId", validateProjectParams, getProjectById);
+router.get("/:projectId", validateProjectIdInParams, getProjectById);
 router.post("/", validateProjectBody, createProject);
 router.put(
   "/:projectId",
-  validateProjectParams,
+  validateProjectIdInParams,
   validateProjectBody,
   editProject
 );
-router.delete("/:projectId", validateProjectParams, deleteProject);
+router.delete("/:projectId", validateProjectIdInParams, deleteProject);
 
 // users_projects
-router.get("/:projectId/users", getUsersWithAccess);
-router.post("/:projectId/users", giveUserAccess);
-router.put("/:projectId/users/:userId", editUsersAccess);
-router.delete("/:projectId/users/:userId", removeUsersAccess);
+router.get("/:projectId/users", validateProjectIdInParams, getUsersWithAccess);
+router.post(
+  "/:projectId/users",
+  validateProjectIdInParams,
+  validatePostUsersProjectBody,
+  giveUserAccess
+);
+router.put(
+  "/:projectId/users/:userId",
+  validateProjectIdInParams,
+  validateUserIdInParams,
+  validatePutUsersProjectBody,
+  editUsersAccess
+);
+router.delete(
+  "/:projectId/users/:userId",
+  validateProjectIdInParams,
+  validateUserIdInParams,
+  removeUsersAccess
+);
 
 // projects_tasks
 router.get("/:projectId/tasks", getAssignedTasks);

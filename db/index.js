@@ -1,5 +1,11 @@
 const pgPromise = require("pg-promise");
-const { Users, Tasks, UsersTasks, Projects } = require("./repos");
+const {
+  Users,
+  Tasks,
+  UsersTasks,
+  Projects,
+  UsersProjects,
+} = require("./repos");
 
 const initOptions = {
   extend(obj, dc) {
@@ -7,6 +13,7 @@ const initOptions = {
     obj.tasks = new Tasks(obj, pgp);
     obj.usersTasks = new UsersTasks(obj, pgp);
     obj.projects = new Projects(obj, pgp);
+    obj.usersProjects = new UsersProjects(obj, pgp);
   },
 };
 

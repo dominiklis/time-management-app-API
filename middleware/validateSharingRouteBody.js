@@ -2,7 +2,7 @@ const ApiError = require("../errors/ApiError");
 const { validateId, validateUsername, validateEmail } = require("../utils");
 const { errorTexts } = require("../utils/constants");
 
-const validateUsersTasksBody =
+const validateSharingRouteBody =
   (requireUser = false, requireAllPermissions = false) =>
   (req, res, next) => {
     let {
@@ -78,4 +78,4 @@ const validateUsersTasksBody =
     next();
   };
 
-module.exports = validateUsersTasksBody;
+module.exports = validateSharingRouteBody;
