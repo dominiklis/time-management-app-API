@@ -31,42 +31,9 @@ const createFilters = (params) => {
 
 const get = async (user, params) => {
   try {
-    const result = await db.manyOrNone(
-      `SELECT us.name AS author_name, 
-        us.email AS author_email, 
-        ts.*, 
-        pj.project_name,
-        ut.accessed_at,
-        ut.can_share,
-        ut.can_change_permissions,
-        ut.can_edit,
-        ut.can_delete, 
-        q_steps.steps,
-        q_users.users FROM 
-          users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-            LEFT JOIN users AS us ON ts.author_id=us.user_id
-            LEFT JOIN (
-              SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
-                steps GROUP BY task_id
-            ) AS q_steps ON q_steps.task_id=ts.task_id 
-            LEFT JOIN (
-              SELECT ut.task_id, json_agg(json_build_object(
-                'user_id', ut.user_id,
-                'user_name', us.name,
-                'can_share', ut.can_share, 
-                'can_edit', ut.can_edit, 
-                'can_change_permissions', ut.can_change_permissions, 
-                'can_delete', ut.can_delete)) 
-              AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
-            ) AS q_users ON q_users.task_id=ts.task_id
-            LEFT JOIN projects AS pj ON ts.project_id=pj.project_id
-          WHERE ut.user_id=$1${createFilters(
-            params
-          )} ORDER BY ts.date_to_complete, ts.start_time`,
-      [user.id]
-    );
+    const tasks = await db.tasks.listForUser(user.id);
 
-    return mapToCamelCase(result);
+    return mapToCamelCase(tasks);
   } catch (error) {
     throw error;
   }
@@ -77,20 +44,7 @@ const getById = async (user, taskId) => {
   if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
 
   try {
-    const result = await db.oneOrNone(
-      `SELECT us.name AS author_name, 
-          us.email AS autor_email, 
-          ts.*, 
-          ut.accessed_at, 
-          ut.can_share, 
-          ut.can_change_permissions, 
-          ut.can_edit, 
-          ut.can_delete FROM 
-        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-          LEFT JOIN users AS us ON ts.author_id=us.user_id
-            WHERE ts.task_id=$1 AND ut.user_id=$2`,
-      [taskId, user.id]
-    );
+    const result = await db.tasks.getSingleById(taskId, user.id);
 
     if (!result) throw new ApiError(400, errorTexts.common.badRequest);
 
@@ -110,52 +64,46 @@ const create = async (
   endTime,
   projectId
 ) => {
-  const taskToInsert = {
-    author_id: user.id,
-    task_name: taskName,
-    task_description: taskDescription,
-    task_completed: taskCompleted,
-    date_to_complete: dateToComplete,
-    start_time: startTime,
-    end_time: endTime,
-    project_id: projectId,
-  };
+  let completedAt = null;
+  if (taskCompleted) completedAt = new Date().toISOString();
 
   try {
     const result = await db.task(async (t) => {
-      const createdTask = await t.oneOrNone(
-        "INSERT INTO tasks (${this:name}) VALUES(${this:csv}) RETURNING *",
-        taskToInsert
+      const createdTask = await t.tasks.add(
+        user.id,
+        taskName,
+        taskDescription,
+        taskCompleted,
+        completedAt,
+        dateToComplete,
+        startTime,
+        endTime,
+        projectId
       );
-
       if (!createdTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      const createdUsersTasks = await t.oneOrNone(
-        `INSERT INTO users_tasks (user_id, task_id, can_share, can_change_permissions, can_edit, can_delete) 
-          VALUES ($1, $2, $3, $3, $3, $3) RETURNING *`,
-        [user.id, createdTask.task_id, true]
+      const createdUsersTasks = await t.usersTasks.add(
+        user.id,
+        createdTask.task_id,
+        true,
+        true,
+        true,
+        true
       );
-
       if (!createdUsersTasks) {
-        await t.none("DELETE FROM tasks WHERE task_id=$1", [
-          createdTask.task_id,
-        ]);
+        await t.tasks.delete(createdTask.task_id);
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
       }
 
-      return {
-        ...createdTask,
-        ...createdUsersTasks,
-        author_name: user.taskName,
-        author_email: user.email,
-        users: [
-          {
-            user_name: user.name,
-            ...createdUsersTasks,
-          },
-        ],
-      };
+      const createdTaskToReturn = await t.tasks.getSingleById(
+        createdTask.task_id,
+        user.id
+      );
+      if (!createdTaskToReturn)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+      return createdTaskToReturn;
     });
 
     return mapToCamelCase(result);
@@ -181,56 +129,47 @@ const edit = async (
 ) => {
   try {
     const result = await db.task(async (t) => {
-      let usersTasks = await t.oneOrNone(
-        `SELECT ut.*, ts.task_completed FROM users_tasks AS ut 
-          LEFT JOIN tasks AS ts ON ut.task_id=ts.task_id 
-          WHERE user_id=$1 AND ut.task_id=$2`,
-        [user.id, taskId]
-      );
+      const usersTasks = await t.usersTasks.getSingle(user.id, taskId);
 
       if (!usersTasks) throw new ApiError(400, errorTexts.common.badRequest);
 
       if (!usersTasks.can_edit)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      let completedAt = "";
+      const isCompleted = await t.oneOrNone(
+        "SELECT task_completed, completed_at FROM tasks WHERE task_id=$1",
+        [taskId]
+      );
+
+      let completedAt = isCompleted.completed_at;
       if (usersTasks.task_completed !== taskCompleted) {
-        if (taskCompleted) completedAt = ", completed_at=CURRENT_TIMESTAMP";
-        else completedAt = ", completed_at=NULL";
+        if (taskCompleted) completedAt = completedAt = new Date().toISOString();
+        else completedAt = null;
       }
 
-      const updatedTask = await t.oneOrNone(
-        `UPDATE tasks AS ts SET
-          task_name=$3,
-          task_description=$4,
-          task_completed=$5,
-          date_to_complete=$6,
-          start_time=$7,
-          end_time=$8,
-          project_id=$9
-          ${completedAt}
-            FROM users_tasks AS ut
-              WHERE ts.task_id = ut.task_id
-                AND ut.user_id=$1
-                AND ut.can_edit=true
-                AND ts.task_id=$2 RETURNING *`,
-        [
-          user.id,
-          taskId,
-          taskName,
-          taskDescription,
-          taskCompleted,
-          dateToComplete,
-          startTime,
-          endTime,
-          projectId,
-        ]
+      console.log(isCompleted);
+
+      const updatedTask = await t.tasks.edit(
+        user.id,
+        taskId,
+        taskName,
+        taskDescription,
+        taskCompleted,
+        dateToComplete,
+        startTime,
+        endTime,
+        projectId,
+        completedAt
       );
 
       if (!updatedTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      return updatedTask;
+      const updatedTaskToReturn = await t.tasks.getSingleById(taskId, user.id);
+      if (!updatedTaskToReturn)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+      return updatedTaskToReturn;
     });
 
     return mapToCamelCase(result);
@@ -246,18 +185,12 @@ const edit = async (
 const remove = async (user, taskId) => {
   try {
     const result = await db.task(async (t) => {
-      const usersTasks = await t.oneOrNone(
-        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
-        [user.id, taskId]
-      );
+      const usersTasks = await t.usersTasks.getSingle(user.id, taskId);
 
       if (!usersTasks || !usersTasks.can_delete)
         throw new ApiError(400, errorTexts.common.badRequest);
 
-      const removedTask = await t.oneOrNone(
-        "DELETE FROM tasks WHERE task_id=$1 RETURNING *",
-        [taskId]
-      );
+      const removedTask = await t.tasks.delete(taskId);
 
       if (!removedTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
