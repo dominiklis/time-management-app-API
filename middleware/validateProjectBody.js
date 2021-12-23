@@ -8,7 +8,7 @@ const validateProjectBody = (req, res, next) => {
   if (!projectName) throw new ApiError(400, "project name is required");
   req.body.projectName = projectName;
 
-  if (!projectDescription) projectDescription = projectDescription.trim();
+  if (projectDescription) projectDescription = projectDescription.trim();
   else taskDescription = null;
   req.body.projectDescription = projectDescription;
 
