@@ -1,4 +1,4 @@
-const { db } = require("../db");
+const { db, helpers } = require("../db");
 const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
@@ -69,6 +69,15 @@ const create = async (
 
   try {
     const result = await db.task(async (t) => {
+      let userProject = null;
+      if (projectId) {
+        userProject = await t.usersProjects.getSingle(user.id, projectId);
+
+        if (!userProject.can_edit) {
+          projectId = null;
+        }
+      }
+
       const createdTask = await t.tasks.add(
         user.id,
         taskName,
@@ -91,9 +100,44 @@ const create = async (
         true,
         true
       );
+
       if (!createdUsersTasks) {
         await t.tasks.delete(createdTask.task_id);
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
+      }
+
+      if (projectId) {
+        const usersForThisProject = await t.usersProjects.listForProject(
+          projectId
+        );
+
+        const values = usersForThisProject
+          .filter((up) => up.user_id !== user.id)
+          .map((up) => {
+            return {
+              user_id: up.user_id,
+              task_id: createdTask.task_id,
+              can_share: up.can_share,
+              can_change_permissions: up.can_change_permissions,
+              can_edit: up.can_edit,
+              can_delete: up.can_edit,
+            };
+          });
+
+        const cs = new helpers.ColumnSet(
+          [
+            "user_id",
+            "task_id",
+            "can_share",
+            "can_change_permissions",
+            "can_edit",
+            "can_delete",
+          ],
+          { table: "users_tasks" }
+        );
+
+        const query = helpers.insert(values, cs);
+        await t.none(query);
       }
 
       const createdTaskToReturn = await t.tasks.getSingleById(
@@ -144,8 +188,6 @@ const edit = async (
         if (taskCompleted) completedAt = completedAt = new Date().toISOString();
         else completedAt = null;
       }
-
-      console.log(isCompleted);
 
       const updatedTask = await t.tasks.edit(
         user.id,
