@@ -34,7 +34,7 @@ class TasksRepository {
               WHERE users_projects.user_id=$1 AND NOT EXISTS (
                 SELECT * FROM users_tasks WHERE users_tasks.user_id=$1 
                   AND users_tasks.task_id=tasks.task_id
-              )
+              ) AND task_id IS NOT NULL
           ) AS ts 
           LEFT JOIN users ON ts.author_id=users.user_id
           LEFT JOIN projects ON ts.project_id=projects.project_id
@@ -87,7 +87,7 @@ class TasksRepository {
               WHERE users_projects.user_id=$1 AND tasks.task_id=$2 AND NOT EXISTS (
                 SELECT * FROM users_tasks WHERE users_tasks.user_id=$1 
                   AND users_tasks.task_id=tasks.task_id
-              )
+              ) AND task_id IS NOT NULL
           ) AS ts 
           LEFT JOIN users ON ts.author_id=users.user_id
           LEFT JOIN projects ON ts.project_id=projects.project_id
