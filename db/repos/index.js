@@ -4,4 +4,5 @@ module.exports = {
   UsersTasks: require("./usersTasksRepo"),
   Projects: require("./projectsRepo"),
   UsersProjects: require("./usersProjectsRepo"),
+  Steps: require("./stepsRepo"),
 };

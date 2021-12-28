@@ -5,6 +5,7 @@ const {
   UsersTasks,
   Projects,
   UsersProjects,
+  Steps,
 } = require("./repos");
 
 const initOptions = {
@@ -14,6 +15,7 @@ const initOptions = {
     obj.usersTasks = new UsersTasks(obj, pgp);
     obj.projects = new Projects(obj, pgp);
     obj.usersProjects = new UsersProjects(obj, pgp);
+    obj.steps = new Steps(obj, pgp);
   },
 };
 

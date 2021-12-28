@@ -3,15 +3,38 @@ const ApiError = require("../errors/ApiError");
 const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
 
+const validateUserTaskAccess = async (userId, taskId, context) => {
+  const userTask = await context.usersTasks.getSingle(userId, taskId);
+  if (userTask) {
+    if (!userTask.can_edit)
+      throw new ApiError(400, errorTexts.common.badRequest);
+  } else {
+    const projectId = await context.oneOrNone(
+      "SELECT project_id FROM tasks WHERE task_id=$1",
+      [taskId]
+    );
+
+    if (!projectId) throw new ApiError(400, errorTexts.common.badRequest);
+
+    const usersProjects = await context.usersProjects.getSingle(
+      userId,
+      projectId.project_id
+    );
+
+    if (!usersProjects || !usersProjects.can_edit)
+      throw new ApiError(400, errorTexts.common.badRequest);
+  }
+};
+
 const get = async (user, taskId) => {
   try {
-    const result = await db.manyOrNone(
-      `
-      SELECT st.* FROM steps AS st LEFT JOIN users_tasks AS ut ON st.task_id=ut.task_id
-        WHERE st.task_id=$1 AND user_id=$2;
-    `,
-      [taskId, user.id]
-    );
+    const result = await db.task(async (t) => {
+      await validateUserTaskAccess(user.id, taskId, t);
+
+      const steps = t.steps.listForTask(taskId);
+
+      return steps;
+    });
 
     return mapToCamelCase(result);
   } catch (error) {
@@ -22,18 +45,9 @@ const get = async (user, taskId) => {
 const create = async (user, taskId, stepText, position) => {
   try {
     const result = await db.task(async (t) => {
-      const userTask = await t.oneOrNone(
-        "SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2",
-        [user.id, taskId]
-      );
+      await validateUserTaskAccess(user.id, taskId, t);
 
-      if (!userTask || !userTask.can_edit)
-        throw new ApiError(400, errorTexts.common.badRequest);
-
-      const createdStep = await t.oneOrNone(
-        "INSERT INTO steps (task_id, step_text, position) VALUES ($1, $2, $3) RETURNING *",
-        [taskId, stepText, position]
-      );
+      const createdStep = await t.steps.add(taskId, stepText, position);
 
       if (!createdStep)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
@@ -71,13 +85,7 @@ const editMultiple = async (user, taskId, stepsToUpdate) => {
 
   try {
     const result = await db.task(async (t) => {
-      const userTask = await t.oneOrNone(
-        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
-        [user.id, taskId]
-      );
-
-      if (!userTask || !userTask.can_edit)
-        throw new ApiError(400, errorTexts.common.badRequest);
+      await validateUserTaskAccess(user.id, taskId, t);
 
       const cs = new helpers.ColumnSet(
         [
@@ -120,13 +128,7 @@ const edit = async (
 ) => {
   try {
     const result = await db.task(async (t) => {
-      const userTask = await t.oneOrNone(
-        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
-        [user.id, taskId]
-      );
-
-      if (!userTask || !userTask.can_edit)
-        throw new ApiError(400, errorTexts.common.badRequest);
+      await validateUserTaskAccess(user.id, taskId, t);
 
       let completedAt = "";
       if (stepCompleted) {
@@ -153,18 +155,9 @@ const edit = async (
 const remove = async (user, taskId, stepId) => {
   try {
     const result = await db.task(async (t) => {
-      const usersTasks = await t.oneOrNone(
-        `SELECT * FROM users_tasks WHERE user_id=$1 AND task_id=$2`,
-        [user.id, taskId]
-      );
+      await validateUserTaskAccess(user.id, taskId, t);
 
-      if (!usersTasks || !usersTasks.can_edit)
-        throw new ApiError(400, errorTexts.common.badRequest);
-
-      const removedStep = await t.oneOrNone(
-        "DELETE FROM steps WHERE step_id=$1 RETURNING *",
-        [stepId]
-      );
+      const removedStep = await t.steps.delete(stepId);
 
       if (!removedStep)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
