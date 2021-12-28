@@ -4,9 +4,6 @@ const { errorTexts } = require("../utils/constants");
 const { mapToCamelCase, validateId } = require("../utils");
 
 const get = async (user, taskId) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
     const result = await db.manyOrNone(
       `
@@ -23,17 +20,6 @@ const get = async (user, taskId) => {
 };
 
 const create = async (user, taskId, stepText, position) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
-  stepText = stepText.trim();
-  if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
-
-  position = parseInt(position);
-  if (typeof position !== "number" || isNaN(position))
-    throw new ApiError(400, errorTexts.common.badRequest);
-
   try {
     const result = await db.task(async (t) => {
       const userTask = await t.oneOrNone(
@@ -62,9 +48,6 @@ const create = async (user, taskId, stepText, position) => {
 };
 
 const editMultiple = async (user, taskId, stepsToUpdate) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
   if (stepsToUpdate.length === 0)
     throw new ApiError(400, errorTexts.common.badRequest);
 
@@ -135,22 +118,6 @@ const edit = async (
   stepCompleted,
   position
 ) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (!stepText && !stepCompleted) return;
-  stepText = stepText.trim();
-  if (!stepText) throw new ApiError(400, errorTexts.common.badRequest);
-  if (typeof stepCompleted !== "boolean")
-    throw new ApiError(400, errorTexts.common.badRequest);
-
-  position = parseInt(position);
-  if (typeof position !== "number" || isNaN(position))
-    throw new ApiError(400, errorTexts.common.badRequest);
-
   try {
     const result = await db.task(async (t) => {
       const userTask = await t.oneOrNone(
@@ -184,12 +151,6 @@ const edit = async (
 };
 
 const remove = async (user, taskId, stepId) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
-  if (!stepId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(stepId)) throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
     const result = await db.task(async (t) => {
       const usersTasks = await t.oneOrNone(

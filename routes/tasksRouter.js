@@ -28,6 +28,7 @@ const {
   validateTaskBody,
   validateSharingRouteBody,
   validateIdInParams,
+  validateStepBody,
 } = require("../middleware");
 
 const validateTaskParams = validateIdInParams("taskId");
@@ -63,11 +64,24 @@ router.delete(
   deleteUserAccess
 );
 
+const validateStepParams = validateIdInParams("stepId");
+
 // steps
-router.get("/:taskId/steps", getSteps);
-router.post("/:taskId/steps", createStep);
-router.put("/:taskId/steps/multiple", editMultipleSteps);
-router.put("/:taskId/steps/:stepId", editStep);
-router.delete("/:taskId/steps/:stepId", deleteStep);
+router.get("/:taskId/steps", validateTaskParams, getSteps);
+router.post("/:taskId/steps", validateTaskParams, validateStepBody, createStep);
+router.put("/:taskId/steps/multiple", validateTaskParams, editMultipleSteps);
+router.put(
+  "/:taskId/steps/:stepId",
+  validateTaskParams,
+  validateStepParams,
+  validateStepBody,
+  editStep
+);
+router.delete(
+  "/:taskId/steps/:stepId",
+  validateTaskParams,
+  validateStepParams,
+  deleteStep
+);
 
 module.exports = router;

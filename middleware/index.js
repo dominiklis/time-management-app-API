@@ -5,6 +5,7 @@ const validateTaskBody = require("./validateTaskBody");
 const validateUserRequestBody = require("./validateUserRequestBody");
 const validateSharingRouteBody = require("./validateSharingRouteBody");
 const validateProjectBody = require("./validateProjectBody");
+const validateStepBody = require("./validateStepBody");
 
 module.exports = {
   auth,
@@ -14,4 +15,5 @@ module.exports = {
   validateUserRequestBody,
   validateSharingRouteBody,
   validateProjectBody,
+  validateStepBody,
 };
