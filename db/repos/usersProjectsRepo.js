@@ -13,6 +13,15 @@ class usersProjectsRepository {
     );
   }
 
+  async listForUser(userId) {
+    return this.db.manyOrNone(
+      `SELECT up.project_id, us.name, us.email, us.user_id, up.* FROM users_projects AS up 
+        LEFT JOIN users AS us ON up.user_id = us.user_id
+          WHERE user_id=$1`,
+      [userId]
+    );
+  }
+
   async getSingle(userId, projectId) {
     return this.db.oneOrNone(
       `SELECT * FROM users_projects WHERE user_id=$1 AND project_id=$2`,

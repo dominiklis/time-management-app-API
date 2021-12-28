@@ -73,8 +73,8 @@ const create = async (
       if (projectId) {
         userProject = await t.usersProjects.getSingle(user.id, projectId);
 
-        if (!userProject.can_edit) {
-          projectId = null;
+        if (!userProject?.can_edit) {
+          throw new ApiError(400, errorTexts.common.badRequest);
         }
       }
 
@@ -100,44 +100,9 @@ const create = async (
         true,
         true
       );
-
       if (!createdUsersTasks) {
         await t.tasks.delete(createdTask.task_id);
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
-      }
-
-      if (projectId) {
-        const usersForThisProject = await t.usersProjects.listForProject(
-          projectId
-        );
-
-        const values = usersForThisProject
-          .filter((up) => up.user_id !== user.id)
-          .map((up) => {
-            return {
-              user_id: up.user_id,
-              task_id: createdTask.task_id,
-              can_share: up.can_share,
-              can_change_permissions: up.can_change_permissions,
-              can_edit: up.can_edit,
-              can_delete: up.can_edit,
-            };
-          });
-
-        const cs = new helpers.ColumnSet(
-          [
-            "user_id",
-            "task_id",
-            "can_share",
-            "can_change_permissions",
-            "can_edit",
-            "can_delete",
-          ],
-          { table: "users_tasks" }
-        );
-
-        const query = helpers.insert(values, cs);
-        await t.none(query);
       }
 
       const createdTaskToReturn = await t.tasks.getSingleById(
@@ -171,26 +136,84 @@ const edit = async (
 ) => {
   try {
     const result = await db.task(async (t) => {
+      // check if task was created by user or shared with him
       const usersTasks = await t.usersTasks.getSingle(user.id, taskId);
+      if (usersTasks) {
+        if (!usersTasks.can_edit)
+          throw new ApiError(400, errorTexts.common.badRequest);
+      }
 
-      if (!usersTasks) throw new ApiError(400, errorTexts.common.badRequest);
-
-      if (!usersTasks.can_edit)
-        throw new ApiError(400, errorTexts.common.badRequest);
-
-      const isCompleted = await t.oneOrNone(
-        "SELECT task_completed, completed_at FROM tasks WHERE task_id=$1",
+      const taskBeforeUpdate = await t.oneOrNone(
+        "SELECT * FROM tasks WHERE task_id=$1",
         [taskId]
       );
 
-      let completedAt = isCompleted.completed_at;
-      if (usersTasks.task_completed !== taskCompleted) {
+      // if task has not been created by or shared with user,
+      // check if task comes from project that the user has access to
+      if (!usersTasks) {
+        const usersProjects = await t.usersProjects.getSingle(
+          user.id,
+          taskBeforeUpdate.project_id
+        );
+
+        if (!usersProjects || !usersProjects.can_edit)
+          throw new ApiError(400, errorTexts.common.badRequest);
+      }
+
+      let completedAt = taskBeforeUpdate.completed_at;
+      if (taskBeforeUpdate.task_completed !== taskCompleted) {
         if (taskCompleted) completedAt = completedAt = new Date().toISOString();
         else completedAt = null;
       }
 
+      // check if user can change project_id
+      if (taskBeforeUpdate.project_id !== projectId) {
+        // setting project_id - check if user is the author of the task and can add tasks to this project
+        if (!taskBeforeUpdate.project_id) {
+          const userProjectForIdToSet = await t.usersProjects.getSingle(
+            user.id,
+            projectId
+          );
+
+          if (
+            !userProjectForIdToSet?.can_edit ||
+            taskBeforeUpdate.author_id !== user.id
+          )
+            throw new ApiError(400, errorTexts.common.badRequest);
+
+          // removing project_id - check if user can remove tasks from this project
+        } else if (!projectId) {
+          const userProjectForIdToRemove = await t.usersProjects.getSingle(
+            user.id,
+            taskBeforeUpdate.project_id
+          );
+
+          if (!userProjectForIdToRemove?.can_edit)
+            throw new ApiError(400, errorTexts.common.badRequest);
+
+          // changing one project_id to other
+          // check if user can remove tasks from this project and add to other project
+        } else {
+          const userProjectForIdToRemove = await t.usersProjects.getSingle(
+            user.id,
+            taskBeforeUpdate.project_id
+          );
+
+          const userProjectForIdToSet = await t.usersProjects.getSingle(
+            user.id,
+            projectId
+          );
+
+          if (
+            !userProjectForIdToSet?.can_edit ||
+            !userProjectForIdToRemove?.can_edit ||
+            taskBeforeUpdate.author_id !== user.id
+          )
+            throw new ApiError(400, errorTexts.common.badRequest);
+        }
+      }
+
       const updatedTask = await t.tasks.edit(
-        user.id,
         taskId,
         taskName,
         taskDescription,
@@ -201,7 +224,6 @@ const edit = async (
         projectId,
         completedAt
       );
-
       if (!updatedTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
@@ -227,15 +249,42 @@ const remove = async (user, taskId) => {
     const result = await db.task(async (t) => {
       const usersTasks = await t.usersTasks.getSingle(user.id, taskId);
 
-      if (!usersTasks || !usersTasks.can_delete)
-        throw new ApiError(400, errorTexts.common.badRequest);
+      if (usersTasks) {
+        if (!usersTasks.can_delete)
+          throw new ApiError(400, errorTexts.common.badRequest);
 
-      const removedTask = await t.tasks.delete(taskId);
+        const removedTask = await t.tasks.delete(taskId);
+        if (!removedTask)
+          throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      if (!removedTask)
-        throw new ApiError(500, errorTexts.common.somethingWentWrong);
+        return removedTask;
+      } else {
+        const taskToRemove = await t.tasks.getSingleById(taskId, user.id);
 
-      return removedTask;
+        const usersProjects = await t.usersProjects.getSingle(
+          user.id,
+          taskToRemove.project_id
+        );
+
+        if (!usersProjects || !usersProjects.can_edit)
+          throw new ApiError(400, errorTexts.common.badRequest);
+
+        const removedTask = await t.tasks.edit(
+          taskToRemove.task_id,
+          taskToRemove.task_name,
+          taskToRemove.task_description,
+          taskToRemove.task_completed,
+          taskToRemove.date_to_complete,
+          taskToRemove.start_time,
+          taskToRemove.end_time,
+          null,
+          taskToRemove.completed_at
+        );
+        if (!removedTask)
+          throw new ApiError(500, errorTexts.common.somethingWentWrong);
+
+        return taskToRemove;
+      }
     });
 
     return mapToCamelCase(result);

@@ -6,24 +6,42 @@ class TasksRepository {
 
   async listForUser(userId) {
     return this.db.manyOrNone(
-      `
-      SELECT us.name AS author_name, 
-      us.email AS author_email, 
-      ts.*, 
-      pj.project_name,
-      ut.accessed_at,
-      ut.can_share,
-      ut.can_change_permissions,
-      ut.can_edit,
-      ut.can_delete, 
-      q_steps.steps,
-      q_users.users FROM 
-        users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-          LEFT JOIN users AS us ON ts.author_id=us.user_id
+      `SELECT 
+        users.name AS author_name, 
+        users.email AS author_email,
+        ts.*,
+        q_steps.steps,
+        q_users.users,
+        projects.project_name
+        FROM (
+          SELECT 
+            tasks.*,
+            users_tasks.accessed_at,
+            users_tasks.can_share,
+            users_tasks.can_change_permissions,
+            users_tasks.can_edit,
+            users_tasks.can_delete
+            FROM users_tasks LEFT JOIN tasks ON users_tasks.task_id=tasks.task_id
+              WHERE users_tasks.user_id=$1
+          UNION SELECT 
+            tasks.*,
+            users_projects.accessed_at,
+            false can_share,
+            false can_change_permissions,
+            users_projects.can_edit can_edit,
+            users_projects.can_edit can_delete
+            FROM users_projects LEFT JOIN tasks ON users_projects.project_id=tasks.project_id
+              WHERE users_projects.user_id=$1 AND NOT EXISTS (
+                SELECT * FROM users_tasks WHERE users_tasks.user_id=$1 
+                  AND users_tasks.task_id=tasks.task_id
+              )
+          ) AS ts 
+          LEFT JOIN users ON ts.author_id=users.user_id
+          LEFT JOIN projects ON ts.project_id=projects.project_id
           LEFT JOIN (
             SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
               steps GROUP BY task_id
-          ) AS q_steps ON q_steps.task_id=ts.task_id 
+            ) AS q_steps ON q_steps.task_id=ts.task_id 
           LEFT JOIN (
             SELECT ut.task_id, json_agg(json_build_object(
               'user_id', ut.user_id,
@@ -32,49 +50,63 @@ class TasksRepository {
               'can_edit', ut.can_edit, 
               'can_change_permissions', ut.can_change_permissions, 
               'can_delete', ut.can_delete)) 
-            AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
-          ) AS q_users ON q_users.task_id=ts.task_id
-          LEFT JOIN projects AS pj ON ts.project_id=pj.project_id
-        WHERE ut.user_id=$1
-  `,
+            AS users FROM users_tasks AS ut 
+            LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
+          ) AS q_users ON q_users.task_id=ts.task_id`,
       [userId]
     );
   }
 
   async getSingleById(taskId, userId) {
     return this.db.oneOrNone(
-      `
-        SELECT us.name AS author_name, 
-        us.email AS author_email, 
-        ts.*, 
-        pj.project_name,
-        ut.accessed_at,
-        ut.can_share,
-        ut.can_change_permissions,
-        ut.can_edit,
-        ut.can_delete, 
+      `SELECT
+        users.name AS author_name, 
+        users.email AS author_email,
+        ts.*,
         q_steps.steps,
-        q_users.users FROM 
-          users_tasks AS ut LEFT JOIN tasks AS ts ON ut.task_id = ts.task_id  
-            LEFT JOIN users AS us ON ts.author_id=us.user_id
-            LEFT JOIN (
-              SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
-                steps GROUP BY task_id
+        q_users.users,
+        projects.project_name
+        FROM (
+          SELECT 
+            tasks.*,
+            users_tasks.accessed_at,
+            users_tasks.can_share,
+            users_tasks.can_change_permissions,
+            users_tasks.can_edit,
+            users_tasks.can_delete
+            FROM users_tasks LEFT JOIN tasks ON users_tasks.task_id=tasks.task_id
+              WHERE users_tasks.user_id=$1 AND users_tasks.task_id=$2
+          UNION SELECT 
+            tasks.*,
+            users_projects.accessed_at,
+            false can_share,
+            false can_change_permissions,
+            users_projects.can_edit can_edit,
+            users_projects.can_edit can_delete
+            FROM users_projects LEFT JOIN tasks ON users_projects.project_id=tasks.project_id
+              WHERE users_projects.user_id=$1 AND tasks.task_id=$2 AND NOT EXISTS (
+                SELECT * FROM users_tasks WHERE users_tasks.user_id=$1 
+                  AND users_tasks.task_id=tasks.task_id
+              )
+          ) AS ts 
+          LEFT JOIN users ON ts.author_id=users.user_id
+          LEFT JOIN projects ON ts.project_id=projects.project_id
+          LEFT JOIN (
+            SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
+              steps GROUP BY task_id
             ) AS q_steps ON q_steps.task_id=ts.task_id 
-            LEFT JOIN (
-              SELECT ut.task_id, json_agg(json_build_object(
-                'user_id', ut.user_id,
-                'user_name', us.name,
-                'can_share', ut.can_share, 
-                'can_edit', ut.can_edit, 
-                'can_change_permissions', ut.can_change_permissions, 
-                'can_delete', ut.can_delete)) 
-              AS users FROM users_tasks AS ut LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
-            ) AS q_users ON q_users.task_id=ts.task_id
-            LEFT JOIN projects AS pj ON ts.project_id=pj.project_id
-          WHERE ut.user_id=$2 AND ut.task_id=$1
-    `,
-      [taskId, userId]
+          LEFT JOIN (
+            SELECT ut.task_id, json_agg(json_build_object(
+              'user_id', ut.user_id,
+              'user_name', us.name,
+              'can_share', ut.can_share, 
+              'can_edit', ut.can_edit, 
+              'can_change_permissions', ut.can_change_permissions, 
+              'can_delete', ut.can_delete)) 
+            AS users FROM users_tasks AS ut 
+            LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
+          ) AS q_users ON q_users.task_id=ts.task_id`,
+      [userId, taskId]
     );
   }
 
@@ -117,7 +149,6 @@ class TasksRepository {
   }
 
   async edit(
-    userId,
     taskId,
     taskName,
     taskDescription,
@@ -130,21 +161,16 @@ class TasksRepository {
   ) {
     return this.db.oneOrNone(
       `UPDATE tasks AS ts SET
-        task_name=$3,
-        task_description=$4,
-        task_completed=$5,
-        date_to_complete=$6,
-        start_time=$7,
-        end_time=$8,
-        project_id=$9,
-        completed_at=$10
-          FROM users_tasks AS ut
-            WHERE ts.task_id = ut.task_id
-              AND ut.user_id=$1
-              AND ut.can_edit=true
-              AND ts.task_id=$2 RETURNING *`,
+        task_name=$2,
+        task_description=$3,
+        task_completed=$4,
+        date_to_complete=$5,
+        start_time=$6,
+        end_time=$7,
+        project_id=$8,
+        completed_at=$9
+          WHERE task_id=$1 RETURNING *`,
       [
-        userId,
         taskId,
         taskName,
         taskDescription,
