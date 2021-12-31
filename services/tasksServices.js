@@ -160,12 +160,6 @@ const edit = async (
           throw new ApiError(400, errorTexts.common.badRequest);
       }
 
-      let completedAt = taskBeforeUpdate.completed_at;
-      if (taskBeforeUpdate.task_completed !== taskCompleted) {
-        if (taskCompleted) completedAt = completedAt = new Date().toISOString();
-        else completedAt = null;
-      }
-
       // check if user can change project_id
       if (taskBeforeUpdate.project_id !== projectId) {
         // setting project_id - check if user is the author of the task and can add tasks to this project
@@ -192,7 +186,7 @@ const edit = async (
             throw new ApiError(400, errorTexts.common.badRequest);
 
           // changing one project_id to other
-          // check if user can remove tasks from this project and add to other project
+          // check if user can remove tasks from this project and add to other project and is the author of the task
         } else {
           const userProjectForIdToRemove = await t.usersProjects.getSingle(
             user.id,
@@ -211,6 +205,12 @@ const edit = async (
           )
             throw new ApiError(400, errorTexts.common.badRequest);
         }
+      }
+
+      let completedAt = taskBeforeUpdate.completed_at;
+      if (taskBeforeUpdate.task_completed !== taskCompleted) {
+        if (taskCompleted) completedAt = completedAt = new Date().toISOString();
+        else completedAt = null;
       }
 
       const updatedTask = await t.tasks.edit(
@@ -249,42 +249,14 @@ const remove = async (user, taskId) => {
     const result = await db.task(async (t) => {
       const usersTasks = await t.usersTasks.getSingle(user.id, taskId);
 
-      if (usersTasks) {
-        if (!usersTasks.can_delete)
-          throw new ApiError(400, errorTexts.common.badRequest);
+      if (!usersTasks || !usersTasks.can_delete)
+        throw new ApiError(400, errorTexts.common.badRequest);
 
-        const removedTask = await t.tasks.delete(taskId);
-        if (!removedTask)
-          throw new ApiError(500, errorTexts.common.somethingWentWrong);
+      const removedTask = await t.tasks.delete(taskId);
+      if (!removedTask)
+        throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-        return removedTask;
-      } else {
-        const taskToRemove = await t.tasks.getSingleById(taskId, user.id);
-
-        const usersProjects = await t.usersProjects.getSingle(
-          user.id,
-          taskToRemove.project_id
-        );
-
-        if (!usersProjects || !usersProjects.can_edit)
-          throw new ApiError(400, errorTexts.common.badRequest);
-
-        const removedTask = await t.tasks.edit(
-          taskToRemove.task_id,
-          taskToRemove.task_name,
-          taskToRemove.task_description,
-          taskToRemove.task_completed,
-          taskToRemove.date_to_complete,
-          taskToRemove.start_time,
-          taskToRemove.end_time,
-          null,
-          taskToRemove.completed_at
-        );
-        if (!removedTask)
-          throw new ApiError(500, errorTexts.common.somethingWentWrong);
-
-        return taskToRemove;
-      }
+      return removedTask;
     });
 
     return mapToCamelCase(result);
