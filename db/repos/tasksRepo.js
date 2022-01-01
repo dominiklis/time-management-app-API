@@ -96,7 +96,7 @@ class TasksRepository {
               steps GROUP BY task_id
             ) AS q_steps ON q_steps.task_id=ts.task_id 
           LEFT JOIN (
-            SELECT ut.task_id, json_agg(json_build_object(
+            SELECT ut.task_id, json_agg(json_build_object (
               'user_id', ut.user_id,
               'user_name', us.name,
               'can_share', ut.can_share, 

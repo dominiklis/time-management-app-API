@@ -37,15 +37,11 @@ const create = async (
       if (!usersProjects.can_change_permissions)
         canShare = canChangePermissions = canEdit = canDelete = false;
 
-      if (!userId) {
-        foundUser = await t.users.getSingle(userName, userEmail, userId);
-        if (!foundUser) throw new ApiError(400, errorTexts.common.badRequest);
-      }
-
-      userId = foundUser.user_id;
+      const foundUser = await t.users.getSingle(userName, userEmail, userId);
+      if (!foundUser) throw new ApiError(400, errorTexts.common.userNotFound);
 
       const createdUP = await t.usersProjects.add(
-        userId,
+        foundUser.user_id,
         projectId,
         canShare,
         canChangePermissions,
@@ -56,7 +52,7 @@ const create = async (
       if (!createdUP)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);
 
-      return createdUP;
+      return { ...createdUP, userName: foundUser.name };
     });
 
     return mapToCamelCase(result);

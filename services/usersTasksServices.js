@@ -37,7 +37,7 @@ const create = async (
       if (!usersTasks.can_change_permissions)
         canShare = canChangePermissions = canEdit = canDelete = false;
 
-      foundUser = await t.users.getSingle(userName, userEmail, userId);
+      const foundUser = await t.users.getSingle(userName, userEmail, userId);
       if (!foundUser) throw new ApiError(400, errorTexts.common.userNotFound);
 
       const createdUT = await t.usersTasks.add(
