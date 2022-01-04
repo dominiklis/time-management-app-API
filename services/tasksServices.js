@@ -54,6 +54,20 @@ const getById = async (user, taskId) => {
   }
 };
 
+const getByNameOrDescription = async (user, searchString) => {
+  if (!searchString || typeof searchString !== "string") return [];
+  searchString = searchString.trim();
+  if (!searchString) return [];
+
+  try {
+    const result = await db.tasks.getByNameOrDescription(user.id, searchString);
+
+    return mapToCamelCase(result);
+  } catch (error) {
+    throw error;
+  }
+};
+
 const create = async (
   user,
   taskName,
@@ -268,6 +282,7 @@ const remove = async (user, taskId) => {
 module.exports = {
   get,
   getById,
+  getByNameOrDescription,
   create,
   edit,
   remove,

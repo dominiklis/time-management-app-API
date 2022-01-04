@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   getTasks,
   getTaskById,
+  searchTasks,
   createTask,
   editTask,
   deleteTask,
@@ -37,6 +38,7 @@ const validatePostUsersTasksBody = validateSharingRouteBody(true, false);
 const validatePutUsersTasksBody = validateSharingRouteBody(false, true);
 
 // tasks
+router.post("/search", searchTasks);
 router.get("/", getTasks);
 router.get("/:taskId", getTaskById);
 router.post("/", validateTaskBody, createTask);

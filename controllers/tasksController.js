@@ -26,6 +26,20 @@ const getTaskById = async (req, res, next) => {
   }
 };
 
+const searchTasks = async (req, res, next) => {
+  const { searchInput } = req.body;
+
+  try {
+    const result = await tasksServices.getByNameOrDescription(
+      req.user,
+      searchInput
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const createTask = async (req, res, next) => {
   const {
     taskName,
@@ -101,6 +115,7 @@ const deleteTask = async (req, res, next) => {
 module.exports = {
   getTasks,
   getTaskById,
+  searchTasks,
   createTask,
   editTask,
   deleteTask,

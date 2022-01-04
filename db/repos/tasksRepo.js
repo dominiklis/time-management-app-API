@@ -110,6 +110,64 @@ class TasksRepository {
     );
   }
 
+  async getByNameOrDescription(userId, searchInput) {
+    return this.db.manyOrNone(
+      `SELECT 
+        users.name AS author_name, 
+        users.email AS author_email,
+        ts.*,
+        q_steps.steps,
+        q_users.users,
+        projects.project_name
+        FROM (
+          SELECT 
+            tasks.*,
+            users_tasks.accessed_at,
+            users_tasks.can_share,
+            users_tasks.can_change_permissions,
+            users_tasks.can_edit,
+            users_tasks.can_delete
+            FROM users_tasks LEFT JOIN tasks ON users_tasks.task_id=tasks.task_id
+              WHERE users_tasks.user_id=$1
+          UNION SELECT 
+            tasks.*,
+            users_projects.accessed_at,
+            false can_share,
+            false can_change_permissions,
+            users_projects.can_edit can_edit,
+            users_projects.can_edit can_delete
+            FROM users_projects LEFT JOIN tasks ON users_projects.project_id=tasks.project_id
+              WHERE users_projects.user_id=$1 AND NOT EXISTS (
+                SELECT * FROM users_tasks WHERE users_tasks.user_id=$1 
+                  AND users_tasks.task_id=tasks.task_id
+              ) AND task_id IS NOT NULL
+          ) AS ts 
+          LEFT JOIN users ON ts.author_id=users.user_id
+          LEFT JOIN projects ON ts.project_id=projects.project_id
+          LEFT JOIN (
+            SELECT steps.task_id, json_agg(steps.* ORDER BY position ASC) AS steps FROM 
+              steps GROUP BY task_id
+            ) AS q_steps ON q_steps.task_id=ts.task_id 
+          LEFT JOIN (
+            SELECT ut.task_id, json_agg(json_build_object(
+              'user_id', ut.user_id,
+              'user_name', us.name,
+              'can_share', ut.can_share, 
+              'can_edit', ut.can_edit, 
+              'can_change_permissions', ut.can_change_permissions, 
+              'can_delete', ut.can_delete)) 
+            AS users FROM users_tasks AS ut 
+            LEFT JOIN users AS us ON ut.user_id=us.user_id GROUP BY task_id
+          ) AS q_users ON q_users.task_id=ts.task_id
+            WHERE 
+              ts.task_name LIKE '%${searchInput}%' OR
+              ts.task_description LIKE '%${searchInput}%' OR
+              users.name LIKE '%${searchInput}%'`,
+
+      [userId]
+    );
+  }
+
   async add(
     userId,
     taskName,
