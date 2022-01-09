@@ -218,7 +218,8 @@ class TasksRepository {
     startTime,
     endTime,
     projectId,
-    completedAt
+    completedAt,
+    priority
   ) {
     return this.db.oneOrNone(
       `UPDATE tasks AS ts SET
@@ -229,7 +230,8 @@ class TasksRepository {
         start_time=$6,
         end_time=$7,
         project_id=$8,
-        completed_at=$9
+        completed_at=$9,
+        priority=$10
           WHERE task_id=$1 RETURNING *`,
       [
         taskId,
@@ -241,6 +243,7 @@ class TasksRepository {
         endTime,
         projectId,
         completedAt,
+        priority,
       ]
     );
   }

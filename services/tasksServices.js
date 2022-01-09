@@ -148,7 +148,8 @@ const edit = async (
   dateToComplete,
   startTime,
   endTime,
-  projectId
+  projectId,
+  priority
 ) => {
   try {
     const result = await db.task(async (t) => {
@@ -238,7 +239,8 @@ const edit = async (
         startTime,
         endTime,
         projectId,
-        completedAt
+        completedAt,
+        priority
       );
       if (!updatedTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);

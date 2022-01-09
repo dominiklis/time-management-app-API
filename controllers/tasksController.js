@@ -80,6 +80,7 @@ const editTask = async (req, res, next) => {
     startTime,
     endTime,
     projectId,
+    priority,
   } = req.body;
   const { taskId } = req.params;
 
@@ -93,7 +94,8 @@ const editTask = async (req, res, next) => {
       dateToComplete,
       startTime,
       endTime,
-      projectId
+      projectId,
+      priority
     );
 
     res.status(200).json(result);
