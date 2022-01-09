@@ -76,7 +76,8 @@ const create = async (
   dateToComplete,
   startTime,
   endTime,
-  projectId
+  projectId,
+  priority
 ) => {
   let completedAt = null;
   if (taskCompleted) completedAt = new Date().toISOString();
@@ -101,7 +102,8 @@ const create = async (
         dateToComplete,
         startTime,
         endTime,
-        projectId
+        projectId,
+        priority
       );
       if (!createdTask)
         throw new ApiError(500, errorTexts.common.somethingWentWrong);

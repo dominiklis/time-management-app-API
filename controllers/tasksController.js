@@ -49,6 +49,7 @@ const createTask = async (req, res, next) => {
     startTime,
     endTime,
     projectId,
+    priority,
   } = req.body;
 
   try {
@@ -60,7 +61,8 @@ const createTask = async (req, res, next) => {
       dateToComplete,
       startTime,
       endTime,
-      projectId
+      projectId,
+      priority
     );
 
     res.status(201).json(result);

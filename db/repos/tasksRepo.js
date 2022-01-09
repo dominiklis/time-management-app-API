@@ -177,7 +177,8 @@ class TasksRepository {
     dateToComplete,
     startTime,
     endTime,
-    projectId
+    projectId,
+    priority
   ) {
     return this.db.oneOrNone(
       `
@@ -190,8 +191,9 @@ class TasksRepository {
         date_to_complete, 
         start_time, 
         end_time, 
-        project_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        project_id,
+        priority
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         userId,
         taskName,
@@ -202,6 +204,7 @@ class TasksRepository {
         startTime,
         endTime,
         projectId,
+        priority,
       ]
     );
   }
