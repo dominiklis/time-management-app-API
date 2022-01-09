@@ -10,6 +10,7 @@ const validateTaskBody = (req, res, next) => {
     startTime,
     endTime,
     projectId,
+    priority,
   } = req.body;
 
   // validate task name
@@ -55,6 +56,17 @@ const validateTaskBody = (req, res, next) => {
   if (!projectId) req.body.projectId = null;
   else if (!validateId(projectId))
     throw new ApiError(400, "invalid project id - id must be uuid");
+
+  // validate priority
+  if (!priority) req.body.priority = 0;
+  else {
+    const p = parseInt(priority);
+    if (isNaN(p))
+      throw new ApiError(400, "invalid project id - id must be uuid");
+
+    if (p < 0) req.body.priority = 0;
+    if (p > 2) req.body.priority = 2;
+  }
 
   next();
 };
