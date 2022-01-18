@@ -20,6 +20,7 @@ app.use(helmet());
 // routes
 const apiRoute = process.env.API_ROUTE || "api";
 app.use(`/${apiRoute}`, routes);
+app.get("/", (req, res) => res.status(200).send("app is working"));
 
 // error handling
 app.use(handleErrors);
