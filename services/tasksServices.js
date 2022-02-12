@@ -40,9 +40,6 @@ const get = async (user, params) => {
 };
 
 const getById = async (user, taskId) => {
-  if (!taskId) throw new ApiError(400, errorTexts.common.badRequest);
-  if (!validateId(taskId)) throw new ApiError(400, errorTexts.common.invalidId);
-
   try {
     const result = await db.tasks.getSingleById(taskId, user.id);
 
@@ -73,7 +70,8 @@ const create = async (
   taskName,
   taskDescription,
   taskCompleted,
-  dateToComplete,
+  startDate,
+  endDate,
   startTime,
   endTime,
   projectId,
@@ -99,7 +97,8 @@ const create = async (
         taskDescription,
         taskCompleted,
         completedAt,
-        dateToComplete,
+        startDate,
+        endDate,
         startTime,
         endTime,
         projectId,
@@ -145,7 +144,8 @@ const edit = async (
   taskName,
   taskDescription,
   taskCompleted,
-  dateToComplete,
+  startDate,
+  endDate,
   startTime,
   endTime,
   projectId,
@@ -235,7 +235,8 @@ const edit = async (
         taskName,
         taskDescription,
         taskCompleted,
-        dateToComplete,
+        startDate,
+        endDate,
         startTime,
         endTime,
         projectId,

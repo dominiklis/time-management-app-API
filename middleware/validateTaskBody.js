@@ -6,7 +6,8 @@ const validateTaskBody = (req, res, next) => {
     taskName,
     taskDescription,
     taskCompleted,
-    dateToComplete,
+    startDate,
+    endDate,
     startTime,
     endTime,
     projectId,
@@ -28,29 +29,27 @@ const validateTaskBody = (req, res, next) => {
   if (typeof taskCompleted !== "boolean")
     throw new ApiError(400, "invalid taskCompleted field - only booleans");
 
-  // validate dateToComplete
-  if (!dateToComplete) req.body.dateToComplete = null;
-  else if (!validateDateString(dateToComplete))
+  // validate startDate
+  if (!startDate) req.body.startDate = null;
+  else if (!validateDateString(startDate))
     throw new ApiError(
       400,
-      "invalid date format in field dateToComplete, use ISO string"
+      "invalid date format in field startDate, use ISO string"
+    );
+
+  // validate endDate
+  if (!endDate) req.body.endDate = null;
+  else if (!validateDateString(endDate))
+    throw new ApiError(
+      400,
+      "invalid date format in field endDate, use ISO string"
     );
 
   // validate startTime
-  if (!startTime) req.body.startTime = null;
-  else if (!validateDateString(startTime))
-    throw new ApiError(
-      400,
-      "invalid date format in field startTime, use ISO string"
-    );
+  if (typeof startTime !== "boolean") req.body.startTime = false;
 
   // validate endTime
-  if (!endTime) req.body.endTime = null;
-  else if (!validateDateString(endTime))
-    throw new ApiError(
-      400,
-      "invalid date format in field endTime, use ISO string"
-    );
+  if (typeof endTime !== "boolean") req.body.endTime = false;
 
   // validate project id
   if (!projectId) req.body.projectId = null;

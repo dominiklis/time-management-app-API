@@ -40,7 +40,7 @@ const validatePutUsersTasksBody = validateSharingRouteBody(false, true);
 // tasks
 router.post("/search", searchTasks);
 router.get("/", getTasks);
-router.get("/:taskId", getTaskById);
+router.get("/:taskId", validateTaskParams, getTaskById);
 router.post("/", validateTaskBody, createTask);
 router.put("/:taskId", validateTaskParams, validateTaskBody, editTask);
 router.delete("/:taskId", validateTaskParams, deleteTask);
